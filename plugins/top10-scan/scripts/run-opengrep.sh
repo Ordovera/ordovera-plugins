@@ -34,18 +34,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Map language to rule path
-declare -A LANG_MAP=(
-  [javascript]="javascript"
-  [typescript]="typescript"
-  [python]="python"
-  [java]="java"
-  [go]="go"
-  [ruby]="ruby"
-  [php]="php"
-)
+# Map language to rule path (case statement for bash 3.2 compatibility)
+case "$LANGUAGE" in
+  javascript|typescript|python|java|go|ruby|php)
+    RULE_LANG="$LANGUAGE"
+    ;;
+  *)
+    RULE_LANG=""
+    ;;
+esac
 
-RULE_LANG="${LANG_MAP[$LANGUAGE]:-}"
 if [[ -z "$RULE_LANG" ]]; then
   HANDLED_ERROR=1
   echo "{\"error\": \"unsupported_language\", \"tool\": \"opengrep\", \"message\": \"Unsupported language: $LANGUAGE. Supported: javascript, typescript, python, java, go, ruby, php\"}"
