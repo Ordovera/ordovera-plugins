@@ -171,8 +171,10 @@ Install order (dependencies first):
    - Linux: `sudo apt install python3` (Debian/Ubuntu) or `sudo dnf install python3` (Fedora)
 
 2. Opengrep (if missing)
-   - macOS: `brew install opengrep`
-   - Linux: `pip3 install opengrep` (or see https://opengrep.dev)
+   - Both platforms: `curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash`
+   - After install, ensure `~/.local/bin` is on PATH: `export PATH="$HOME/.local/bin:$PATH"`
+   - Verify: `which opengrep && opengrep --version`
+   - Alternative: download binary from https://github.com/opengrep/opengrep/releases
 
 3. SCA tool for each detected package manager that's missing:
    - pip-audit: `pip install pip-audit`
@@ -190,7 +192,7 @@ After each install, verify it succeeded:
 which <tool> && <tool> --version
 ```
 
-**If verification fails**, report the error and tell the user: "Install of [tool] failed. You can try installing it manually later. Continuing with remaining tools."
+**If verification fails**, report the error and tell the user: "Install of [tool] failed. You can try installing it manually later. Continuing with remaining tools." Do NOT attempt to install an alternative tool. If opengrep fails, point the user to https://github.com/opengrep/opengrep/releases for manual download.
 
 **If the user denies a command** (via the tool permission prompt), treat that tool as "skipped by user" and move to the next one. Do not retry.
 
@@ -200,26 +202,14 @@ After all installs, re-run the readiness check and show the updated table.
 
 Print a copy-pasteable block with only the missing tools, tailored to the detected platform:
 
-For macOS:
+For both macOS and Linux:
 ```bash
-# top10-scan: install missing dependencies (macOS)
+# top10-scan: install missing dependencies
 
-# SAST - static code analysis
-brew install opengrep
-
-# SCA - dependency vulnerability scanning
-pip install pip-audit
-
-# DAST - dynamic application testing
-docker pull zaproxy/zap-stable
-```
-
-For Linux:
-```bash
-# top10-scan: install missing dependencies (Linux)
-
-# SAST - static code analysis
-pip3 install opengrep
+# SAST - static code analysis (opengrep)
+curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
+# Ensure ~/.local/bin is on PATH
+export PATH="$HOME/.local/bin:$PATH"
 
 # SCA - dependency vulnerability scanning
 pip install pip-audit
@@ -257,3 +247,4 @@ If external tools are missing but Python is available:
 - If an install fails, report the error and continue with remaining tools
 - After installs, re-check and show updated status
 - Skip tools that do not apply to the detected stack (unless no stack detected)
+- NEVER substitute a different tool for a missing one. If opengrep install fails, report the failure and suggest the user install it manually from https://github.com/opengrep/opengrep/releases. Do not install semgrep or any other tool as a replacement. The plugin scripts expect the exact tools specified.
