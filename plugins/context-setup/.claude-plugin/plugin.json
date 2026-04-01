@@ -1,0 +1,8 @@
+{
+  "name": "context-setup",
+  "description": "Scaffold, audit, align, optimize MCP tools, and upgrade context engineering files",
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  }
+}

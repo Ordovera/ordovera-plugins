@@ -1,0 +1,25 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ordovera-plugins",
+  "description": "Open source Claude Code plugins for building, securing, and governing AI agent systems",
+  "owner": {
+    "name": "Ordovera",
+    "email": "brian@ordovera.com"
+  },
+  "plugins": [
+    {
+      "name": "context-setup",
+      "description": "Scaffold, audit, align, optimize MCP tools, and upgrade context engineering files. Generates AGENTS.md files, context directories, and cascading structures from project analysis.",
+      "source": "./plugins/context-setup",
+      "category": "development",
+      "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/plugins/context-setup"
+    },
+    {
+      "name": "top10-scan",
+      "description": "OWASP Top 10:2025 multi-layer security audit. Orchestrates Opengrep (SAST), ZAP (DAST), and Dependency-Check (SCA) alongside Claude's design-level analysis.",
+      "source": "./plugins/top10-scan",
+      "category": "security",
+      "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/plugins/top10-scan"
+    }
+  ]
+}
