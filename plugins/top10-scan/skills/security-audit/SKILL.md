@@ -250,3 +250,5 @@ Never interrupt a running audit for version management. Never block the audit on
 - Focus on high-risk areas from the attack surface to manage context budget
 - Prioritize actionable results over volume
 - If the user denies a command at any step, continue with remaining steps
+- ALWAYS use the provided scripts (run-opengrep.sh, run-sca.sh, run-zap.sh, parse-sarif.py, parse-zap.py, synthesize.py) rather than running tools directly. The scripts handle graceful degradation, output normalization, and bash compatibility. Do not bypass them.
+- NEVER substitute a different tool (e.g., semgrep) for opengrep. If opengrep is missing, log it as skipped and continue.

@@ -46,7 +46,7 @@ Check the JSON output for an `"error"` key:
 > 2. **Proceed without it** -- I'll run the design review only (covers the same OWASP categories but without automated pattern detection)
 > 3. **Run setup instead** -- `/top10-scan:top10-setup` to check and install all tools
 
-Detect platform (`uname -s`) to determine install command: macOS = `brew install opengrep`, Linux = `pip3 install opengrep`.
+Install command (both platforms): `curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash` -- then ensure `~/.local/bin` is on PATH.
 
 Wait for the user to choose.
 
@@ -131,3 +131,5 @@ Only include `--sast-findings` if Opengrep ran successfully.
 - Severity uses CVSS-inspired 5-factor model
 - Prioritize actionable results over volume
 - Focus on code patterns, not theoretical risks
+- ALWAYS use the provided scripts (run-opengrep.sh, parse-sarif.py, synthesize.py) rather than running tools directly. The scripts handle graceful degradation, output normalization, and bash compatibility. Do not bypass them.
+- NEVER substitute a different tool (e.g., semgrep) for opengrep. If opengrep is missing, follow the install or skip flow above.

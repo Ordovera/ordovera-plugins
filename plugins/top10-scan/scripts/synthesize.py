@@ -131,15 +131,22 @@ def dedup_dast(findings):
 
 
 def dedup_sca(findings):
-    """Group by (package_name, cwe) - keep highest severity."""
+    """Group by (package_name, advisory) - keep highest severity.
+
+    A single advisory may have multiple CWEs; grouping per-CWE would
+    duplicate the finding for each CWE.  Use the advisory ID as the
+    dedup key instead, falling back to the sorted CWE tuple.
+    """
     groups = {}
     for f in findings:
-        cwes = get_cwes(f) or [None]
         pkg = f.get("package_name", f.get("name", ""))
-        for cwe in cwes:
-            key = (pkg, cwe)
-            if key not in groups or _sev_rank(f) > _sev_rank(groups[key]):
-                groups[key] = f
+        advisory = f.get("advisory_url", f.get("advisory", f.get("ghsa", "")))
+        if not advisory:
+            cwes = tuple(sorted(get_cwes(f) or []))
+            advisory = str(cwes) if cwes else ""
+        key = (pkg, advisory)
+        if key not in groups or _sev_rank(f) > _sev_rank(groups[key]):
+            groups[key] = f
     return list(groups.values())
 
 
@@ -234,6 +241,8 @@ def _adjust_from_attack_surface(finding, factors, attack_surface):
     if not attack_surface:
         return
     endpoints = attack_surface.get("endpoints", [])
+    if not isinstance(endpoints, list):
+        return
     file_path = finding.get("file", "")
     route = finding.get("route", "") or finding.get("url", "")
 
