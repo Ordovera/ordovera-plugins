@@ -119,14 +119,25 @@ def dedup_sast(findings):
 
 
 def dedup_dast(findings):
-    """Group by (url, parameter, cwe) - keep highest severity."""
+    """Group by (rule_id/title, parameter, cwe) - keep highest severity.
+
+    ZAP produces one finding per URL for the same issue (e.g., missing CSP
+    on every page).  Grouping by URL keeps all those duplicates.  Instead,
+    group by the finding type so 57 per-URL instances collapse to ~16 unique
+    finding types.  Store affected URLs in an 'affected_urls' list.
+    """
     groups = {}
     for f in findings:
         cwes = get_cwes(f) or [None]
+        finding_type = f.get("rule_id", f.get("alert", f.get("title", "")))
         for cwe in cwes:
-            key = (f.get("url", ""), f.get("parameter", ""), cwe)
+            key = (finding_type, f.get("parameter", ""), cwe)
             if key not in groups or _sev_rank(f) > _sev_rank(groups[key]):
-                groups[key] = f
+                groups[key] = dict(f)
+                groups[key]["affected_urls"] = []
+            url = f.get("url", "")
+            if url and url not in groups[key].get("affected_urls", []):
+                groups[key].setdefault("affected_urls", []).append(url)
     return list(groups.values())
 
 
@@ -196,42 +207,63 @@ def score_sast(finding, attack_surface):
 
 
 def score_dast(finding, attack_surface):
-    """Default scoring for DAST findings."""
+    """Score DAST findings, seeded from ZAP's severity."""
     sev = finding.get("severity", "medium").lower()
-    impact_map = {"critical": 3, "high": 3, "error": 3, "medium": 2, "warning": 2, "low": 1, "info": 1}
-    factors = {
-        "attack_vector": 3,
-        "exposure": 3,
-        "data_sensitivity": 2,
-        "exploitability": 3,
-        "impact": impact_map.get(sev, 2),
+    # DAST findings are runtime-confirmed, so attack_vector is always network (3).
+    # Seed other factors from ZAP's severity to preserve differentiation.
+    sev_factors = {
+        "critical": {"exposure": 3, "data_sensitivity": 3, "exploitability": 3, "impact": 3},
+        "high":     {"exposure": 3, "data_sensitivity": 2, "exploitability": 3, "impact": 3},
+        "error":    {"exposure": 3, "data_sensitivity": 2, "exploitability": 3, "impact": 3},
+        "medium":   {"exposure": 2, "data_sensitivity": 2, "exploitability": 2, "impact": 2},
+        "warning":  {"exposure": 2, "data_sensitivity": 1, "exploitability": 2, "impact": 2},
+        "low":      {"exposure": 1, "data_sensitivity": 1, "exploitability": 2, "impact": 1},
+        "info":     {"exposure": 1, "data_sensitivity": 1, "exploitability": 1, "impact": 1},
     }
+    base = sev_factors.get(sev, sev_factors["medium"])
+    factors = {"attack_vector": 3}
+    factors.update(base)
     _adjust_from_attack_surface(finding, factors, attack_surface)
     return factors
 
 
 def score_sca(finding, attack_surface):
-    """Default scoring for SCA findings."""
-    factors = {
-        "attack_vector": 3,
-        "exposure": 2,
-        "data_sensitivity": 2,
-        "exploitability": 3,
-        "impact": 2,
+    """Score SCA findings, seeded from npm audit / tool severity and CVSS."""
+    sev = finding.get("severity", "moderate").lower()
+    cvss = finding.get("cvss_score", 0.0)
+    # Seed from the tool's severity label
+    sev_factors = {
+        "critical": {"attack_vector": 3, "exposure": 3, "data_sensitivity": 3, "exploitability": 3, "impact": 3},
+        "high":     {"attack_vector": 3, "exposure": 2, "data_sensitivity": 2, "exploitability": 3, "impact": 3},
+        "moderate": {"attack_vector": 2, "exposure": 2, "data_sensitivity": 2, "exploitability": 2, "impact": 2},
+        "medium":   {"attack_vector": 2, "exposure": 2, "data_sensitivity": 2, "exploitability": 2, "impact": 2},
+        "low":      {"attack_vector": 1, "exposure": 1, "data_sensitivity": 1, "exploitability": 2, "impact": 1},
     }
+    factors = dict(sev_factors.get(sev, sev_factors["moderate"]))
+    # If CVSS score is present, let it bump impact/exploitability
+    if cvss >= 9.0:
+        factors["impact"] = max(factors["impact"], 3)
+        factors["exploitability"] = max(factors["exploitability"], 3)
+    elif cvss >= 7.0:
+        factors["impact"] = max(factors["impact"], 2)
+        factors["exploitability"] = max(factors["exploitability"], 3)
     _adjust_from_attack_surface(finding, factors, attack_surface)
     return factors
 
 
 def score_design(finding, attack_surface):
-    """Default scoring for design review findings."""
-    factors = {
-        "attack_vector": 2,
-        "exposure": 2,
-        "data_sensitivity": 2,
-        "exploitability": 1,
-        "impact": 2,
+    """Score design review findings, seeded from the reviewer's severity label."""
+    sev = finding.get("severity", "medium").lower()
+    # Design review findings carry severity from Claude's analysis.
+    # Use that to seed factors so a HIGH IDOR doesn't score the same as LOW logging.
+    sev_factors = {
+        "critical": {"attack_vector": 3, "exposure": 3, "data_sensitivity": 3, "exploitability": 3, "impact": 3},
+        "high":     {"attack_vector": 3, "exposure": 3, "data_sensitivity": 2, "exploitability": 2, "impact": 3},
+        "medium":   {"attack_vector": 2, "exposure": 2, "data_sensitivity": 2, "exploitability": 2, "impact": 2},
+        "low":      {"attack_vector": 1, "exposure": 1, "data_sensitivity": 1, "exploitability": 1, "impact": 2},
+        "info":     {"attack_vector": 1, "exposure": 1, "data_sensitivity": 1, "exploitability": 1, "impact": 1},
     }
+    factors = dict(sev_factors.get(sev, sev_factors["medium"]))
     _adjust_from_attack_surface(finding, factors, attack_surface)
     return factors
 
