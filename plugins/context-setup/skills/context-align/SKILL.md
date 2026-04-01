@@ -25,11 +25,20 @@ Reads all context sources and checks them against the filesystem and project con
    - Commands in context files vs `package.json` scripts / `Makefile` targets / CI configs
    - "Run `npm run test`" when the actual script is `npm test` or `pnpm test`
 
-4. **Skill relevance:**
+4. **Trust-adjacent references vs actual config:**
+   - MCP server names mentioned in context vs `.mcp.json` or equivalent config
+   - Hook locations and script paths mentioned in context vs `.claude/settings.json`, hook directories, or referenced scripts
+   - Statements about operator-owned automation that no longer match the files on disk
+
+5. **Working-memory references:**
+   - If `MEMORY.md` exists, references inside it vs current files, directories, and current context structure
+   - Detect when `MEMORY.md` points at deleted paths or stale migration plans
+
+6. **Skill relevance:**
    - Skill descriptions referencing technologies not in this project's stack
    - Skills that reference tools or workflows that no longer exist
 
-5. **Cascading contradictions:**
+7. **Cascading contradictions:**
 
    Find every AGENTS.md in the project tree (root, subdirectories, global if present). Compare what each level says about the same concern:
 
@@ -62,6 +71,8 @@ Report each finding with the specific file, line reference, what it says, and wh
 >
 > **src/api/AGENTS.md:8** -- Says "run `npm run test:api`" but `package.json` has no `test:api` script. Available test scripts: `test`, `test:unit`, `test:integration`.
 >
+> **AGENTS.md:28** -- Says the preflight hook lives at `.claude/hooks/preflight.py`, but `.claude/settings.json` points to `scripts/hooks/preflight.py`. Update the trust-boundary notes so agents can find the real automation surface.
+>
 > No cascading contradictions found. All skill descriptions match current stack.
 
 ## Notes
@@ -69,5 +80,7 @@ Report each finding with the specific file, line reference, what it says, and wh
 This skill operationalizes the "they rot" principle from Key Principles. Context files that reference outdated dependencies, missing directories, or renamed commands actively mislead AI sessions. Regular alignment checks catch drift before it causes implementation errors.
 
 Context-align checks *references* (does this file/package/command exist?), not *accuracy* (is this architectural description still true?). The latter requires human judgment. This skill handles the mechanical checks so humans can focus on the substantive ones.
+
+If `MEMORY.md` exists, treat it as optional and volatile. The goal is not to enforce its presence, only to catch stale references when teams choose to use it.
 
 Cascading contradictions are a specific failure mode of multi-level context. A project AGENTS.md might say "use Vitest for testing" while a subdirectory AGENTS.md says "use Jest for this module." Both might be intentional (legacy module with different tooling) or accidental (subdirectory file wasn't updated). The skill surfaces the contradiction; the human decides which is correct.

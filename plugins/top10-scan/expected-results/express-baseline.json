@@ -1,0 +1,61 @@
+{
+  "fixture": "vulnerable-express",
+  "expected_findings": [
+    {
+      "category": "A02",
+      "description": "No helmet middleware for security headers",
+      "file": "server.js",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "CORS configured to allow all origins",
+      "file": "server.js",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "MD5 used for password hashing",
+      "file": "lib/crypto.js",
+      "source": "sast"
+    },
+    {
+      "category": "A03",
+      "description": "Outdated lodash with known prototype pollution CVE",
+      "file": "package.json",
+      "source": "sca"
+    },
+    {
+      "category": "A05",
+      "description": "Dynamic code execution with user-controlled input",
+      "file": "server.js",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL string concatenation with user input",
+      "file": "server.js",
+      "source": "sast"
+    },
+    {
+      "category": "A08",
+      "description": "External scripts loaded without SRI",
+      "file": "server.js",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Empty catch blocks swallow errors silently",
+      "file": "server.js",
+      "source": "sast"
+    },
+    {
+      "category": "A10",
+      "description": "SSRF via unvalidated user-provided URL",
+      "file": "server.js",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 6,
+  "required_categories": ["A02", "A03", "A05", "A08", "A10"]
+}

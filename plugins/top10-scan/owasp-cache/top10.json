@@ -1,0 +1,77 @@
+{
+  "version": "2025",
+  "source": "https://owasp.org/Top10/",
+  "fetched": "2026-03-31T12:00:00Z",
+  "categories": [
+    {
+      "id": "A01",
+      "name": "Broken Access Control",
+      "cwes": [22, 23, 35, 59, 200, 201, 219, 264, 275, 276, 284, 285, 352, 359, 377, 402, 425, 441, 497, 538, 540, 548, 552, 566, 601, 639, 651, 668, 706, 862, 863, 913, 922, 1275],
+      "description": "Failures in enforcing access control policies, allowing users to act outside their intended permissions. Includes IDOR, privilege escalation, CORS misconfiguration, and SSRF.",
+      "changed_from_2021": "Absorbs SSRF (A10:2021); remains #1"
+    },
+    {
+      "id": "A02",
+      "name": "Security Misconfiguration",
+      "cwes": [2, 11, 13, 15, 16, 209, 260, 315, 520, 526, 537, 541, 547, 611, 614, 756, 776, 942, 1004, 1032],
+      "description": "Missing or incorrect security hardening across the application stack, including default credentials, unnecessary features enabled, overly permissive cloud configurations, and missing security headers.",
+      "changed_from_2021": "Moved from A05:2021 to A02:2025"
+    },
+    {
+      "id": "A03",
+      "name": "Software Supply Chain Failures",
+      "cwes": [426, 427, 494, 502, 565, 784, 829, 830, 915, 1035, 1104, 1321],
+      "description": "Vulnerabilities introduced through third-party components, build pipelines, CI/CD integrity, and dependency management failures. Covers typosquatting, compromised packages, and insecure build processes.",
+      "changed_from_2021": "NEW - evolved from A08:2021 Software and Data Integrity Failures with expanded supply chain focus"
+    },
+    {
+      "id": "A04",
+      "name": "Cryptographic Failures",
+      "cwes": [261, 296, 310, 319, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 331, 335, 336, 337, 338, 339, 340, 347, 523, 720, 757, 759, 760, 780, 818, 916],
+      "description": "Failures related to cryptography that expose sensitive data, including use of weak algorithms, improper key management, insufficient entropy, and transmission of data in cleartext.",
+      "changed_from_2021": "Moved from A02:2021 to A04:2025"
+    },
+    {
+      "id": "A05",
+      "name": "Injection",
+      "cwes": [20, 74, 75, 77, 78, 79, 80, 83, 87, 88, 89, 90, 91, 93, 94, 95, 96, 97, 98, 99, 113, 116, 138, 184, 470, 471, 564, 610, 643, 644, 652, 917],
+      "description": "User-supplied data sent to an interpreter as part of a command or query without proper validation or escaping. Includes SQL injection, XSS, command injection, LDAP injection, and template injection.",
+      "changed_from_2021": "Moved from A03:2021 to A05:2025"
+    },
+    {
+      "id": "A06",
+      "name": "Insecure Design",
+      "cwes": [73, 183, 209, 213, 235, 256, 257, 266, 269, 280, 311, 312, 313, 316, 419, 430, 434, 444, 451, 472, 501, 522, 525, 539, 579, 598, 602, 642, 646, 650, 653, 656, 657, 799, 807, 840, 841, 927, 1021, 1173],
+      "description": "Flaws in the design and architecture of the application rather than implementation bugs. Includes missing threat modeling, insecure business logic, and lack of defense-in-depth patterns.",
+      "changed_from_2021": "Moved from A04:2021 to A06:2025"
+    },
+    {
+      "id": "A07",
+      "name": "Authentication Failures",
+      "cwes": [255, 259, 287, 288, 290, 294, 295, 297, 300, 302, 304, 306, 307, 346, 384, 521, 613, 620, 640, 798, 940, 1216],
+      "description": "Weaknesses in authentication mechanisms that allow attackers to compromise passwords, keys, or session tokens, or exploit implementation flaws to assume other users' identities.",
+      "changed_from_2021": "Remains A07; renamed from Identification and Authentication Failures"
+    },
+    {
+      "id": "A08",
+      "name": "Data Integrity Failures",
+      "cwes": [345, 353, 426, 494, 502, 565, 784, 829, 830, 915],
+      "description": "Failures to verify the integrity of data and code, including insecure deserialization, insufficient verification of data authenticity, and trusting data without validation.",
+      "changed_from_2021": "Narrowed scope from A08:2021; supply chain aspects moved to A03:2025"
+    },
+    {
+      "id": "A09",
+      "name": "Security Logging and Monitoring Failures",
+      "cwes": [117, 223, 532, 778],
+      "description": "Insufficient logging, monitoring, and alerting that prevents detection of active breaches, delayed incident response, and inability to establish forensic evidence trails.",
+      "changed_from_2021": "Remains A09:2025"
+    },
+    {
+      "id": "A10",
+      "name": "Mishandling of Exceptional Conditions",
+      "cwes": [230, 248, 252, 253, 280, 354, 391, 395, 396, 397, 431, 754, 755],
+      "description": "Improper handling of unexpected conditions, errors, and edge cases that can lead to undefined behavior, information disclosure, denial of service, or security bypass.",
+      "changed_from_2021": "NEW - replaces A10:2021 SSRF (moved to A01)"
+    }
+  ]
+}

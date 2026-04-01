@@ -1,0 +1,38 @@
+# AGENTS.md
+
+Support operations console for internal remediation workflows.
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+
+## Commands
+
+- `npm run dev`
+- `npm run test`
+- `npm run lint`
+
+## MCP Tool Notes
+
+When a CLI tool and MCP server both cover the same operation, prefer CLI for reads -- CLI generally offers field selection, output piping, and documented behavior that MCP servers typically lack.
+
+- **github** -- [document the preferred GitHub read/write patterns for this repo]
+- **sentry** -- [run `/context-setup:context-mcp` for optimization recommendations for this server]
+
+## Trust Boundary Notes
+
+- MCP server selection, credentials, and hook behavior are operator-owned surfaces.
+- `.mcp.json` and `.claude/settings.json` define automation agents may rely on, but should not change casually without approval.
+- `MEMORY.md` exists in this repo; keep it for short-lived working memory only. Durable rules belong here or in `context/` files.
+
+## Code Standards
+
+- Prefer ESM imports
+- Keep components small and typed
+
+## Do NOT
+
+- [Review which trust-sensitive files should not be modified without approval]
+- [Review which automation or configuration surfaces should remain operator-controlled]

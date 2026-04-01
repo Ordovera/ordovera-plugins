@@ -15,6 +15,8 @@ Guide a transition from your current context level to the next one without losin
    - Single AGENTS.md over ~60 lines -- full level
    - AGENTS.md + context/ directory or multiple AGENTS.md files -- cascading level
    - Check for `.claude/skills/` and `.claude/settings.json` hooks to assess skills/hooks layers
+   - Check for `.mcp.json` and equivalent MCP config to assess trust-adjacent surfaces
+   - Check for `MEMORY.md` if present so it can be reconciled rather than ignored
 
 2. **Identify the appropriate upgrade path** based on current level and project signals.
 
@@ -24,7 +26,7 @@ Guide a transition from your current context level to the next one without losin
 
 ### No Context to Minimal
 
-Equivalent to running `/context-setup:context-scaffold` at the minimal level. Generate AGENTS.md from project analysis with sections: project description, tech stack, commands, code standards, Do NOT. Create CLAUDE.md symlink.
+Equivalent to running `/context-setup:context-scaffold` at the minimal level. Generate AGENTS.md from project analysis with sections: project description, tech stack, commands, code standards, Do NOT. If trust-adjacent automation is already present, include a lightweight trust-boundary section or placeholder. Create CLAUDE.md symlink.
 
 ### Minimal to Full Single File
 
@@ -35,8 +37,15 @@ Read the existing AGENTS.md. Identify which full-level sections are missing. The
 - **Auth and Permissions** -- auth mechanism, session handling, roles. Populate from detected auth packages; bracket-placeholder specifics.
 - **Data Model** -- core models and relationships. Populate from schema files if present (Prisma, SQLAlchemy models, etc.); bracket-placeholder otherwise.
 - **API Conventions** -- URL structure, request/response format, error handling. Populate from detected route structure; bracket-placeholder conventions.
+- **Trust Boundary Notes** -- add when MCP config, hooks, or other operator-owned automation exists. Document what agents may rely on, what is operator-owned, and what should not be changed casually.
 
 Insert missing sections into the existing file after the current content, preserving everything already written. Do not rewrite or reorder existing sections.
+
+If `MEMORY.md` exists:
+
+- keep `AGENTS.md` as the primary durable artifact
+- add a short note in the upgrade output that `MEMORY.md` should remain short-lived working memory only
+- if `MEMORY.md` appears to duplicate durable project rules, recommend moving those rules into `AGENTS.md`
 
 **Trigger signals** (when minimal is no longer enough):
 
@@ -52,23 +61,34 @@ Read the existing AGENTS.md. Extract sections into separate context/ files:
 1. **Rewrite AGENTS.md** as the project-level entry point:
    - Keep: project description, tech stack summary, commands, code standards, Do NOT
    - Add: a note pointing to `context/` for architectural detail
+   - Add: a short trust-boundary summary when MCP, hooks, or operator-owned automation exist
    - Target: under 60 lines
 
 2. **Create context/ directory** with files extracted from the existing AGENTS.md:
    - `system-overview.md` -- extracted from project description + any business context
    - `architecture-decisions.md` -- extracted from Architecture section, restructured as decisions with rationale
+   - `operational-boundaries.md` -- extracted from trust-surface notes, hook guidance, MCP notes, or operator-owned automation guidance when present
    - `technical-requirements.md` -- extracted from any performance, security, or compliance notes (may need bracket placeholders if this wasn't in the original)
    - `api-documentation.md` -- extracted from API Conventions section
    - `working-style-guide.md` -- extracted from any contribution or workflow notes (may need bracket placeholders)
 
-3. **Create subdirectory AGENTS.md files** where the project has clearly distinct areas. Common candidates:
+3. **Move volatile detail out of the root file**:
+   - Current migration notes, sprint logs, troubleshooting diaries, and other compaction-hostile material should move into appropriate `context/` files or be dropped if they are stale
+   - The goal is a durable entrypoint, not a smaller dump file
+
+4. **Create subdirectory AGENTS.md files** where the project has clearly distinct areas. Common candidates:
    - API layer (error handling patterns, response formats, middleware conventions)
    - UI/component layer (component patterns, state management, styling conventions)
    - Test directory (testing conventions, fixture patterns, mocking approach)
 
    Only create subdirectory files where there are genuinely different patterns. A subdirectory file that would just say "follow the root conventions" should not exist.
 
-4. **Verify no content was lost** by comparing section coverage before and after.
+5. **Reconcile `MEMORY.md` if present**:
+   - do not promote it to the primary root artifact
+   - preserve it only if it is serving as short-lived working memory
+   - if it duplicates durable architecture, policy, or trust-boundary guidance, recommend trimming it after the upgrade
+
+6. **Verify no content was lost** by comparing section coverage before and after.
 
 **Trigger signals** (when a single file is no longer enough):
 
@@ -88,6 +108,8 @@ Describe the three operational skills that complement context files:
 - **scope-check** -- Validates planned tasks against AGENTS.md boundary rules before starting work. Three-level assessment: clear, warning, blocked. Run before tasks in protected areas.
 
 These skills consume the same AGENTS.md files that the project already has. They add operational automation on top of the declarative context layer.
+
+When this layer is suggested after a cascading upgrade, explain that skills should read the durable root entrypoint plus supporting `context/` files, not depend on volatile notes living at the root.
 
 Note: The distribution mechanism for skills may vary. The `context-engineering` repo provides working examples in `examples/claude-config/skills/`. How you install them depends on your tool and workflow.
 
@@ -116,7 +138,11 @@ Explain the three-layer defense model:
 
 All three layers read the same AGENTS.md files. The context file is the single source of truth; skills and hooks are the operational enforcement layer.
 
-Note: Hook registration (settings.json format, event types) is Claude Code-specific. The hook scripts themselves are portable shell scripts. The `context-engineering` repo provides working examples in `examples/claude-config/`.
+If MCP config or hooks already exist but are undocumented, recommend adding or upgrading trust-boundary guidance before adding more enforcement. The user chooses which automation to trust; the upgrade should make that trust surface legible.
+
+Working implementations of these hooks are available in `<plugin_dir>/hooks/` with a test suite that verifies all allow/block decisions. See `hooks/README.md` for installation instructions.
+
+Note: Hook registration (settings.json format, event types) is Claude Code-specific. The hook scripts themselves are portable shell/Python scripts.
 
 **Trigger signals** (when to add hooks):
 
@@ -143,10 +169,12 @@ Note: Hook registration (settings.json format, event types) is Claude Code-speci
 >
 > **Upgrade plan:**
 >
-> 1. Rewrite AGENTS.md as a 55-line entry point (keep: description, stack, commands, standards, Do NOT)
-> 2. Create context/ directory with 4 files extracted from current content
-> 3. Create subdirectory AGENTS.md for src/api/ (distinct error handling and response patterns)
-> 4. Create CLAUDE.md symlink (currently missing)
+> 1. Rewrite AGENTS.md as a 55-line entry point (keep: description, stack, commands, standards, Do NOT, trust summary)
+> 2. Create context/ directory with 5 files extracted from current content, including operational-boundaries.md
+> 3. Move current migration notes out of the root file so the entrypoint stays durable across long sessions
+> 4. Create subdirectory AGENTS.md for src/api/ (distinct error handling and response patterns)
+> 5. Create CLAUDE.md symlink (currently missing)
+> 6. Keep existing MEMORY.md only if it remains short-lived working memory rather than duplicate project policy
 >
 > No content will be lost -- existing sections move to context/ files. Want to proceed?
 
@@ -158,4 +186,6 @@ The trigger signals are guidelines, not thresholds. A 140-line AGENTS.md that's 
 
 Content extraction during the full-to-cascading upgrade requires care. Sections don't always map 1:1 to context/ files. An "Architecture" section might contain both architectural decisions (goes to architecture-decisions.md) and business context (goes to system-overview.md). Read the content, don't just move headings.
 
-The skills and hooks layers are described but not installed by this skill. Installation mechanisms vary by tool and may change over time. This skill explains what each layer does, when it's valuable, and what trigger signals suggest it's time. The user decides how and when to install.
+This skill explains what each layer does, when it's valuable, and what trigger signals suggest it's time. Working hook implementations with tests are provided in `<plugin_dir>/hooks/`. The user decides how and when to install.
+
+`AGENTS.md` remains primary throughout every upgrade path. `CLAUDE.md` remains the compatibility surface. `MEMORY.md`, if present, may be preserved as optional working memory, but it should not become the durable source of project policy.

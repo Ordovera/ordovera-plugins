@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "description": "Framework and tool detection markers used by context-scaffold during project discovery.",
+  "package_managers": {
+    "npm": {"manifests": ["package.json"], "lockfiles": ["package-lock.json"]},
+    "yarn": {"manifests": ["package.json"], "lockfiles": ["yarn.lock"]},
+    "pnpm": {"manifests": ["package.json"], "lockfiles": ["pnpm-lock.yaml"]},
+    "pip": {"manifests": ["requirements.txt", "pyproject.toml"], "lockfiles": ["Pipfile.lock", "poetry.lock"]},
+    "go": {"manifests": ["go.mod"], "lockfiles": ["go.sum"]},
+    "cargo": {"manifests": ["Cargo.toml"], "lockfiles": ["Cargo.lock"]},
+    "bundler": {"manifests": ["Gemfile"], "lockfiles": ["Gemfile.lock"]},
+    "composer": {"manifests": ["composer.json"], "lockfiles": ["composer.lock"]},
+    "nuget": {"manifests": ["*.csproj", "*.sln"], "lockfiles": []}
+  },
+  "frameworks": {
+    "nextjs": {"markers": ["next.config.js", "next.config.ts", "next.config.mjs"]},
+    "vite": {"markers": ["vite.config.js", "vite.config.ts", "vite.config.mjs"]},
+    "angular": {"markers": ["angular.json"]},
+    "webpack": {"markers": ["webpack.config.js", "webpack.config.ts"]}
+  },
+  "config_signals": {
+    "typescript": {"markers": ["tsconfig.json"]},
+    "tailwind": {"markers": ["tailwind.config.js", "tailwind.config.ts", "tailwind.config.mjs"]},
+    "prisma": {"markers": ["prisma/"]},
+    "env": {"markers": [".env", ".env.local", ".env.example"]},
+    "claude": {"markers": [".claude/"]},
+    "testing": {"markers": ["vitest.config.ts", "jest.config.js", "jest.config.ts", "pytest.ini", "pyproject.toml"]}
+  },
+  "mcp_configs": {
+    "project_level": {
+      "claude_code": ".mcp.json",
+      "codex": ".codex/config.toml",
+      "gemini": ".gemini/settings.json",
+      "vscode": ".vscode/mcp.json",
+      "cursor": ".cursor/mcp.json"
+    },
+    "user_level": {
+      "claude_code": "~/.claude/settings.json",
+      "codex": "~/.codex/config.toml",
+      "gemini": "~/.gemini/settings.json",
+      "windsurf": "~/.codeium/windsurf/mcp_config.json"
+    }
+  },
+  "trust_automation": {
+    "claude_settings": ".claude/settings.json",
+    "hook_directories": [".claude/hooks/"],
+    "hook_script_directories": ["scripts/hooks/"]
+  }
+}

@@ -1,6 +1,6 @@
 # context-setup
 
-A Claude Code plugin for scaffolding, auditing, aligning, optimizing MCP tools, and upgrading context engineering files. Generates AGENTS.md files, context directories, and cascading structures based on your project's actual stack and complexity.
+A Claude Code plugin for scaffolding, auditing, aligning, optimizing MCP tools, and upgrading context engineering files. Generates `AGENTS.md` files, `CLAUDE.md` compatibility entrypoints, and cascading structures based on your project's actual stack, trust surfaces, and complexity.
 
 Originally developed as part of [context-engineering](https://github.com/fending/context-engineering).
 
@@ -18,6 +18,66 @@ Originally developed as part of [context-engineering](https://github.com/fending
 3. `/context-setup:context-audit` -- verify structure and completeness
 4. `/context-setup:context-mcp` -- if you have MCP servers connected, get optimization guidance
 5. Periodically: `/context-setup:context-align` for drift detection, `/context-setup:context-usage` mid-session for token diagnostics
+6. Revisit root context after adding hooks, MCP servers, or long-lived workflows so trust boundaries and compaction-safe guidance stay current
+
+## Philosophy
+
+- `AGENTS.md` is the primary artifact.
+- `CLAUDE.md` is the compatibility surface and should point at `AGENTS.md`, not fork away from it.
+- `context/` exists to keep root guidance compact, durable, and survivable across long sessions.
+- `MEMORY.md` is not a required pattern. When it adds value, it holds execution state that should survive context compression but not outlive the current work session -- active debugging hypotheses, in-flight migration checklists, temporary coordination notes. If the content would still be relevant next month, it belongs in `AGENTS.md` or `context/`. The plugin recognizes existing `MEMORY.md` files and helps keep them from becoming a second root policy file.
+- Hook config, MCP config, and other operator-owned automation are part of the context trust boundary and should be documented clearly enough that agents know what they may rely on and what they should treat carefully.
+- The trust-boundary and `MEMORY.md` positions in v2.0.0 were informed by the Claude Code source leak of 31 March 2026 -- specifically, by what the extracted code actually shows about context loading and memory patterns, rather than by the speculative framing in popular coverage.
+
+## Sample Output
+
+Example `context-scaffold` outcome for a small TypeScript app:
+
+```text
+Recommendation: minimal
+Creates:
+- AGENTS.md
+- CLAUDE.md -> AGENTS.md
+
+Key sections:
+- Tech Stack
+- Commands
+- Code Standards
+- Do NOT
+```
+
+Example `context-audit` outcome for a project with stale context:
+
+```text
+Context Audit Results
+
+Level Appropriateness: Partial
+Format and Conventions: Partial
+Structural Issues: Partial
+
+Priority recommendations:
+1. Fix stale command references
+2. Repair CLAUDE.md symlink behavior
+3. Replace contradictory subdirectory guidance
+```
+
+Example `context-align` outcome:
+
+```text
+Found drift:
+- AGENTS.md references React 18 but package.json shows React 19
+- AGENTS.md references src/lib/auth/ but the path does not exist
+- architecture-decisions.md references npm run test:api but that script does not exist
+```
+
+Example trust-boundary guidance that `context-scaffold` should encourage for more advanced setups:
+
+```text
+Trust Boundary Notes
+- MCP server selection and credentials are operator-owned; use configured servers, but do not add or change them without approval.
+- Repository hooks may block or rewrite work. Check documented hook behavior before bypassing validation.
+- Keep root AGENTS.md stable and move volatile migration notes into context/ files so guidance survives compaction.
+```
 
 ## Updating
 
@@ -34,15 +94,15 @@ When no other installed plugin has a skill with the same name, Claude Code allow
 
 ### /context-setup:context-scaffold
 
-Analyze your project and generate the right context files pre-populated with discovered information. Detects tech stack, framework, directory structure, and existing context. Recommends a complexity level (minimal, full single file, or cascading with context directory) and generates the corresponding files.
+Analyze your project and generate the right context files pre-populated with discovered information. Detects tech stack, framework, directory structure, existing context, and trust-adjacent surfaces such as MCP config and hook config. Recommends a complexity level (minimal, full single file, or cascading with context directory) and generates the corresponding files.
 
 ### /context-setup:context-audit
 
-Evaluate your existing context structure for completeness and best practices. Checks whether your context complexity matches your project complexity, whether required sections are present, whether format conventions are followed, and whether structural issues exist (duplicated subdirectory files, empty context directory files, cascading contradictions).
+Evaluate your existing context structure for completeness and best practices. Checks whether your context complexity matches your project complexity, whether required sections are present, whether format conventions are followed, whether trust-boundary surfaces are acknowledged, and whether structural issues exist (duplicated subdirectory files, empty context directory files, cascading contradictions, overloaded root files, misused `MEMORY.md` files).
 
 ### /context-setup:context-align
 
-Cross-reference your context files against the actual codebase to find drift. Checks tech stack references against dependencies, directory paths against the filesystem, build commands against actual scripts, skill relevance against the current stack, and cascading contradictions across context levels.
+Cross-reference your context files against the actual codebase to find drift. Checks tech stack references against dependencies, directory paths against the filesystem, build commands against actual scripts, hook and MCP references against actual config, `MEMORY.md` references when present, skill relevance against the current stack, and cascading contradictions across context levels.
 
 ### /context-setup:context-usage
 
@@ -56,6 +116,32 @@ Detect connected MCP servers across platforms, match them against known optimiza
 
 Guide a transition from your current context level to the next one. Preserves existing content while adding missing sections (minimal to full), extracting content into a context directory (full to cascading), or describing the skills and hooks layers you can add on top.
 
+## Validate Output
+
+After generating or updating context:
+
+1. Review every `[bracket]` placeholder and replace the ones that require project knowledge.
+2. Run `/context-setup:context-audit` to check structural completeness.
+3. Run `/context-setup:context-align` to catch stale paths, dependencies, or commands.
+4. Review `Do NOT` boundaries manually before relying on them.
+5. If the project uses MCP servers, hooks, or a `MEMORY.md`, confirm the generated guidance reflects those trust and durability concerns explicitly.
+
+For contributors working on the plugin itself, see [`docs/verification.md`](docs/verification.md).
+
+## Known Limits
+
+- Placeholders are intentional. The plugin prefers an explicit gap over confidently inventing project-specific details.
+- Generated architecture, auth, and workflow prose may still need human correction.
+- `context-audit` checks structure and completeness, not whether architectural descriptions are true.
+- `context-align` checks references against the repo, not whether business intent is still correct.
+- Trust-boundary guidance is deliberately lightweight. The plugin can surface MCP, hook, and automation surfaces, but the operator still decides which tools or permissions are acceptable.
+- `context-usage` depends on visible session history and is less useful after history compression.
+- `context-mcp` includes both deterministic template matching and best-effort guidance for unknown servers.
+
 ## Learning the Patterns
 
 This plugin generates context files based on patterns documented in the [context-engineering](https://github.com/fending/context-engineering) repo. For the theory behind the structures, read the repo's examples and the companion article: [Rethinking Team Topologies for AI-Augmented Development](https://brianfending.substack.com/p/rethinking-team-topologies-for-ai).
+
+## Disclaimer
+
+This software is provided as-is, without warranty of any kind. The authors and contributors are not liable for any damages or losses arising from its use. Generated files should be reviewed before committing to your project.

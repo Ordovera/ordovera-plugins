@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "rule_id": "design-review-A01-001",
+      "title": "Unauthenticated admin endpoint",
+      "severity": "HIGH",
+      "file": "app/api/admin/route.ts",
+      "line": 4,
+      "cwe": [862],
+      "description": "Admin endpoint has no authentication.",
+      "source": "design_review",
+      "recommendation": "Add auth middleware."
+    },
+    {
+      "rule_id": "design-review-A07-001",
+      "title": "Weak JWT secret",
+      "severity": "HIGH",
+      "file": "lib/auth.ts",
+      "line": 3,
+      "cwe": [798],
+      "description": "JWT signed with hardcoded weak secret.",
+      "source": "design_review",
+      "recommendation": "Use env var for secret, add expiration."
+    }
+  ]
+}

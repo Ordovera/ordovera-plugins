@@ -1,0 +1,34 @@
+{
+  "fixture": "fullstack-app",
+  "skill": "context-scaffold",
+  "status": "golden_baseline",
+  "recommendation": "full_single_file",
+  "expected_files": [
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "forbidden_files": [
+    "context/system-overview.md"
+  ],
+  "required_headings": [
+    "## Tech Stack",
+    "## Commands",
+    "## Project Structure",
+    "## Architecture",
+    "## Auth and Permissions",
+    "## Data Model",
+    "## API Conventions",
+    "## Do NOT"
+  ],
+  "required_substrings": [
+    "Next.js",
+    "NextAuth",
+    "Prisma",
+    "PostgreSQL",
+    "app/api/users",
+    "["
+  ],
+  "forbidden_substrings": [
+    "context/system-overview.md"
+  ]
+}

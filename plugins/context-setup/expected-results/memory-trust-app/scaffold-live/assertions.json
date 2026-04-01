@@ -1,0 +1,40 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-scaffold",
+  "mode": "live",
+  "exact": {
+    "expected_files": ["AGENTS.md", "CLAUDE.md"],
+    "forbidden_files": ["context/architecture-decisions.md", "context/operational-boundaries.md", "src/AGENTS.md"],
+    "claude_md_is_symlink": true,
+    "recommendation": "full_single_file"
+  },
+  "structural": {
+    "required_headings": [
+      "## Tech Stack",
+      "## Commands",
+      "## MCP Tool Notes",
+      "## Trust Boundary Notes",
+      "## Code Standards",
+      "## Do NOT"
+    ],
+    "forbidden_headings": [],
+    "line_count_envelope": {"min": 60, "max": 150}
+  },
+  "semantic": {
+    "required_signals": [
+      "github",
+      "sentry",
+      "operator-owned",
+      "MEMORY.md",
+      "short-lived working memory",
+      "hooks",
+      ".claude/settings.json"
+    ],
+    "forbidden_signals": [
+      "Current migration focus",
+      "running issue log",
+      "active debugging checklist",
+      "Linear"
+    ]
+  }
+}

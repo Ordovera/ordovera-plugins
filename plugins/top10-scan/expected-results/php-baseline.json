@@ -1,0 +1,67 @@
+{
+  "fixture": "vulnerable-php",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Admin routes lack auth middleware",
+      "file": "routes/web.php",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "User profile endpoint without ownership check",
+      "file": "routes/web.php",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "APP_DEBUG enabled in production config",
+      "file": "config/app.php",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "Default APP_KEY not regenerated",
+      "file": "config/app.php",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "Hardcoded database credentials",
+      "file": ".env.example",
+      "source": "sast"
+    },
+    {
+      "category": "A04",
+      "description": "SHA1 used for password hashing instead of bcrypt",
+      "file": "app/Http/Controllers/AuthController.php",
+      "source": "sast"
+    },
+    {
+      "category": "A04",
+      "description": "Weak session token generation using mt_rand",
+      "file": "app/Http/Controllers/AuthController.php",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via string concatenation",
+      "file": "app/Http/Controllers/UserController.php",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection in user update",
+      "file": "app/Http/Controllers/UserController.php",
+      "source": "sast"
+    },
+    {
+      "category": "A09",
+      "description": "No logging of failed login attempts",
+      "file": "app/Http/Controllers/AuthController.php",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 7,
+  "required_categories": ["A01", "A02", "A04", "A05", "A09"]
+}

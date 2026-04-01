@@ -27,9 +27,13 @@ Originally developed as part of [context-engineering](https://github.com/fending
 
 ### top10-scan
 
-OWASP Top 10:2025 multi-layer security audit. Orchestrates Opengrep (SAST), ZAP (DAST), and Dependency-Check (SCA) alongside Claude's design-level analysis.
+OWASP Top 10:2025 multi-layer security audit. Orchestrates Opengrep (SAST), ZAP (DAST), and SCA alongside Claude's design-level analysis into a single synthesized report.
 
-*Coming soon.*
+[Documentation](plugins/top10-scan/README.md)
+
+## Disclaimer
+
+This software is provided as-is, without warranty of any kind. See each plugin's README for plugin-specific disclaimers.
 
 ## License
 

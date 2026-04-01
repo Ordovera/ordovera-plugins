@@ -1,0 +1,14 @@
+{
+  "fixture": "vulnerable-fastapi",
+  "skill": "design-review",
+  "mode": "live",
+  "minimum_finding_count": 5,
+  "required_categories": ["A01", "A02", "A05", "A07", "A10"],
+  "required_signals": [
+    "auth",
+    "SQL",
+    "MD5",
+    "CORS",
+    "error"
+  ]
+}

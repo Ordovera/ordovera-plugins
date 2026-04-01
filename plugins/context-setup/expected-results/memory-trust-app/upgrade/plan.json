@@ -1,0 +1,19 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-upgrade",
+  "status": "golden_baseline",
+  "current_level": "full_single_file",
+  "recommended_upgrade": "cascading_with_context_directory",
+  "required_actions": [
+    "Rewrite AGENTS.md as a durable root entrypoint with a short trust summary",
+    "Create context/operational-boundaries.md for MCP, hooks, and operator-owned automation",
+    "Move volatile migration or troubleshooting notes out of the root AGENTS.md",
+    "Keep MEMORY.md only as short-lived working memory if it is still useful"
+  ],
+  "required_signals": [
+    "MCP config present",
+    "Claude hook settings present",
+    "MEMORY.md present",
+    "Root context contains volatile workflow notes"
+  ]
+}

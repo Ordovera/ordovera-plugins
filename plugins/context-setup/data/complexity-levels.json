@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "description": "Context complexity level definitions used by context-scaffold for recommendation and generation.",
+  "levels": {
+    "minimal": {
+      "target_lines": 40,
+      "criteria": "Solo project, single language, straightforward structure. One deployment target, no auth layer, no multi-service architecture.",
+      "required_sections": ["Tech Stack", "Commands", "Code Standards", "Do NOT"],
+      "optional_sections": ["MCP Tool Notes", "Trust Boundary Notes"],
+      "generates": ["AGENTS.md", "CLAUDE.md"],
+      "trigger_signals": [
+        "Single language project",
+        "No auth packages detected",
+        "No database/ORM packages detected",
+        "Fewer than 10 top-level directories"
+      ]
+    },
+    "full_single_file": {
+      "target_lines": "100-120",
+      "criteria": "Multi-layer app (frontend + backend), auth system, database, API with conventions worth documenting. Multiple backing services. Still a single deployable unit. Also appropriate when meaningful trust surfaces exist but architectural depth does not warrant a context/ split.",
+      "required_sections": [
+        "Tech Stack", "Commands", "Command Output Notes", "Project Structure",
+        "Architecture", "Auth and Permissions", "Data Model", "API Conventions",
+        "Code Standards", "Do NOT"
+      ],
+      "optional_sections": ["Integration Map", "MCP Tool Notes", "Trust Boundary Notes"],
+      "generates": ["AGENTS.md", "CLAUDE.md"],
+      "trigger_signals": [
+        "Multiple layers (frontend + backend, or API + workers)",
+        "Auth packages present",
+        "Database/ORM present",
+        "API routes exist",
+        "2+ distinct service client packages"
+      ]
+    },
+    "cascading": {
+      "root_target_lines": 60,
+      "criteria": "Multiple projects or workspaces, team environment, complex architecture with distinct subsystems. Or a single project large enough that a single file would exceed ~150 lines.",
+      "root_sections": [
+        "project description", "tech stack summary", "commands",
+        "code standards", "Do NOT", "trust summary", "context/ pointer"
+      ],
+      "context_files": [
+        "system-overview.md",
+        "architecture-decisions.md",
+        "operational-boundaries.md",
+        "technical-requirements.md",
+        "api-documentation.md",
+        "working-style-guide.md"
+      ],
+      "generates": ["AGENTS.md", "CLAUDE.md", "context/"],
+      "trigger_signals": [
+        "AGENTS.md exceeds ~150 lines",
+        "Multiple contributors need different sections",
+        "Multi-project workspace or monorepo",
+        "Context budget pressured by loading entire file",
+        "Root file carries volatile migration notes or sprint logs"
+      ]
+    }
+  }
+}

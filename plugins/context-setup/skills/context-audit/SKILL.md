@@ -7,9 +7,13 @@ description: Evaluates an existing context structure for completeness, level app
 
 Evaluate your context structure for structural completeness and best practices. This checks whether your context files are well-formed and appropriate for your project's complexity.
 
+## Reference Data
+
+Audit categories, check items, and tool-specific optimization recommendations are defined in `<plugin_dir>/data/audit-categories.json`. The instructions below describe how to apply them.
+
 ## What This Skill Does
 
-Reads all context files and evaluates them against five categories. Reports findings as a structured audit with scores and prioritized recommendations.
+Reads all context files and evaluates them against seven categories. Reports findings as a structured audit with scores and prioritized recommendations.
 
 ### 1. Level Appropriateness
 
@@ -55,6 +59,7 @@ Check which required sections are present for the current context level.
 
 - Project-root AGENTS.md as entry point (under ~60 lines, references context/)
 - Context directory files covering at least: system overview, architecture decisions
+- Root guidance that stays durable across long sessions, with volatile implementation or migration notes moved into subordinate files
 - Subdirectory AGENTS.md files only where areas have distinct patterns
 - No content duplication between levels
 
@@ -64,6 +69,7 @@ Check adherence to context engineering conventions:
 
 - `AGENTS.md` exists as the primary file (not just `CLAUDE.md` alone)
 - `CLAUDE.md` exists as a symlink to `AGENTS.md` (not a duplicate with separate content)
+- If `MEMORY.md` exists, it is treated as optional working memory rather than a second root policy file
 - Do NOT section entries are specific and actionable:
   - Good: "Do not modify files in `src/auth/` without explicit approval"
   - Bad: "Be careful with security-sensitive code"
@@ -81,6 +87,8 @@ Check for common structural problems:
 - **Cascading contradictions:** Rules at different levels that disagree about the same concern without a comment explaining the exception. Check these categories across all AGENTS.md files in the tree: test runner, linter/formatter, package manager, framework version, import style, and overlapping "Do NOT" boundaries. A subdirectory saying "use Jest" while the root says "use Vitest" is fine if documented -- flag it when it isn't.
 - **Missing coverage:** Directories with clearly distinct patterns (API layer, test directory, component library) that lack their own AGENTS.md when the project uses cascading.
 - **Orphaned references:** Context files that reference other context files or directories that don't exist.
+- **Overloaded root guidance:** Project-root AGENTS.md carries volatile migration notes, current sprint state, or long troubleshooting logs that should live in `context/` so the primary file survives history compaction.
+- **Misused MEMORY.md:** `MEMORY.md` exists but mostly duplicates AGENTS.md, permanent architecture notes, or contributor policy instead of short-lived working memory.
 
 ### 5. Content Quality
 
@@ -91,6 +99,7 @@ Check for common content problems:
 - **Missing symlink:** CLAUDE.md is a regular file instead of a symlink, or doesn't exist at all
 - **Overly long root file:** Project-root AGENTS.md exceeding ~150 lines (candidate for cascading)
 - **Missing integration map:** Project has 2+ distinct service client packages (e.g., Supabase + Jira client, Prisma + Stripe SDK) but no integration map or equivalent domain-to-service mapping. Without this, agents default to the dominant persistence layer for new work, ignoring TODO comments or type hints that indicate a different backing service.
+- **Missing long-session design:** Project has enough context complexity to warrant a `context/` split, but the root file still tries to carry everything itself.
 
 ### 6. MCP Tool Notes Cross-Reference
 
@@ -103,7 +112,18 @@ Check whether the project has MCP servers configured but no MCP Tool Notes secti
 
 This check does not inspect tool registries, generate templates, or make recommendations about specific MCP tools. That's `/context-setup:context-mcp`'s domain. This check only surfaces the gap.
 
-### 7. Command Output Optimization
+### 7. Trust Boundary Coverage
+
+Check whether operator-owned automation surfaces are acknowledged clearly enough for an agent to behave safely.
+
+- Scan for trust-adjacent config such as `.mcp.json`, `.claude/settings.json`, `.claude/hooks/`, `.codex/config.toml`, `.cursor/`, and project hook scripts referenced by those configs
+- If any of these are present and root context lacks explicit guidance about who owns those surfaces, what can be relied on, and what should not be changed without approval: report a finding
+- If context mentions MCP or hooks only as tools to use, but not as part of a trust boundary: report a finding
+- If root guidance implies agents may freely edit operator-owned automation without review: report a high-priority finding
+
+This is a pragmatic safety pass, not a policy engine. The goal is to make trust assumptions visible, not to decide which tools the operator should install.
+
+### 8. Command Output Optimization
 
 Check whether the project could benefit from a Command Output Notes section, and if session history is available, surface specific optimization opportunities.
 
@@ -155,7 +175,7 @@ For each finding, include:
 - Why it matters (one sentence)
 - Suggested fix (specific action)
 
-Order recommendations by impact: structural issues and missing sections first, formatting conventions last.
+Order recommendations by impact: structural issues and trust-boundary gaps first, formatting conventions last.
 
 ## When to Use
 
@@ -189,6 +209,9 @@ Order recommendations by impact: structural issues and missing sections first, f
 > **MCP Tool Notes: Missing**
 > `.mcp.json` found with 2 configured servers (atlassian, supabase). No MCP Tool Notes section in AGENTS.md. Run `/context-setup:context-mcp` for optimization recommendations.
 >
+> **Trust Boundary Coverage: Partial**
+> `.mcp.json` and `.claude/settings.json` are present, but root guidance does not explain that MCP selection and hook behavior are operator-owned surfaces. Add a short trust-boundary section so agents know to use configured tooling without rewriting it casually.
+>
 > **Command Output Optimization: Partial**
 > AGENTS.md has a Commands section but no Command Output Notes. Detected vitest and eslint in devDependencies.
 > Suggested additions:
@@ -204,19 +227,19 @@ Order recommendations by impact: structural issues and missing sections first, f
 > **Priority Recommendations:**
 >
 > 1. Upgrade to full single file -- project complexity warrants expanded coverage (run `/context-setup:context-upgrade`)
-> 2. Add Command Output Notes section -- vitest and eslint detected with concise variants available
-> 3. Fix `src/api/AGENTS.md` duplication -- replace with API-specific content or delete
+> 2. Add trust-boundary notes for MCP and hooks so operator-owned surfaces are documented clearly
+> 3. Add Command Output Notes section -- vitest and eslint detected with concise variants available
 
 ## How This Differs from Other Skills
 
-- **context-audit** (this skill) checks structure and completeness -- is your context well-formed?
+- **context-audit** (this skill) checks structure, completeness, and trust-boundary framing -- is your context well-formed?
 - **context-align** (this plugin) checks accuracy -- does your context match your code?
 - **context-mcp** (this plugin) detects MCP servers and generates optimization guidance -- are your MCP tools documented?
 - **context-usage** (this plugin) observes session tool calls -- where is context going?
 - **onboard** (`examples/claude-config/` skill) discovers and summarizes -- what context exists?
 - **scope-check** (`examples/claude-config/` skill) validates tasks against boundaries -- can I do this?
 
-Context-audit and context-align are complementary. Audit checks whether the *structure* is right (correct sections, appropriate level, no duplication, concise commands that optimize output). Align checks whether the *content* is right (references match reality, commands work, versions are current). Run audit when you change your context structure. Run align when you change your codebase.
+Context-audit and context-align are complementary. Audit checks whether the *structure* is right (correct sections, appropriate level, no duplication, durable root guidance, concise commands that optimize output, trust surfaces acknowledged). Align checks whether the *content* is right (references match reality, commands work, versions are current). Run audit when you change your context structure. Run align when you change your codebase.
 
 Context-usage and context-audit category 7 are complementary. Usage is the quick diagnostic -- run it mid-session to see what's happening. If it finds verbose or repeated commands, it points you to audit for specific recommendations. Usage observes; audit prescribes.
 
@@ -225,5 +248,7 @@ Context-usage and context-audit category 7 are complementary. Usage is the quick
 The level appropriateness check uses heuristics, not rules. A project with 50 directories might legitimately need only a minimal AGENTS.md if it's a monorepo where each package is simple. The audit surfaces the mismatch; the human decides whether it's intentional.
 
 Section completeness is checked against the standard templates from `/context-setup:context-scaffold`. If you've intentionally omitted a section (no API to document, no auth layer), the audit will flag it -- acknowledge and move on. The goal is awareness, not compliance.
+
+`MEMORY.md` is optional. If it exists, audit it as a working-memory artifact. It should hold volatile execution context, not replace `AGENTS.md` or `context/` as the durable source of truth.
 
 The audit is structural, not semantic. It can check whether an "Architecture" section exists and has content, but it can't check whether that content accurately describes your architecture. That requires human review or the code-level checks that `/context-setup:context-align` provides.

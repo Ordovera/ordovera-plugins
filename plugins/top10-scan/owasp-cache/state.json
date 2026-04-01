@@ -1,0 +1,7 @@
+{
+  "last_checked": "2026-03-31T12:00:00Z",
+  "current_version": "2025",
+  "check_interval_hours": 24,
+  "source_repo": "OWASP/Top10",
+  "update_available": false
+}

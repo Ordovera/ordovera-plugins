@@ -1,0 +1,30 @@
+{
+  "fixture": "minimal-node-app",
+  "skill": "context-scaffold",
+  "mode": "live",
+  "exact": {
+    "expected_files": ["AGENTS.md", "CLAUDE.md"],
+    "forbidden_files": ["context/system-overview.md", "context/architecture-decisions.md", "src/AGENTS.md"],
+    "claude_md_is_symlink": true,
+    "recommendation": "minimal"
+  },
+  "structural": {
+    "required_headings": ["## Tech Stack", "## Commands", "## Code Standards", "## Do NOT"],
+    "forbidden_headings": ["## Data Model", "## Auth and Permissions", "## API Conventions", "## Architecture", "## Project Structure"],
+    "line_count_envelope": {"min": 20, "max": 60}
+  },
+  "semantic": {
+    "required_signals": [
+      "TypeScript",
+      "vitest",
+      "eslint",
+      "["
+    ],
+    "forbidden_signals": [
+      "## MCP Tool Notes",
+      "## Trust Boundary Notes",
+      "context/",
+      "cascading"
+    ]
+  }
+}

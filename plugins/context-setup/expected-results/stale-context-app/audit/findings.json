@@ -1,0 +1,16 @@
+{
+  "fixture": "stale-context-app",
+  "skill": "context-audit",
+  "status": "golden_baseline",
+  "required_findings": [
+    "CLAUDE.md is a regular file instead of a symlink",
+    "Commands section references npm run test:api but package.json has no test:api script",
+    "Context references src/lib/auth/ but the project uses src/middleware/auth.ts",
+    "Cascading contradiction on test runner between root AGENTS.md and src/api/AGENTS.md"
+  ],
+  "priority_recommendations": [
+    "Fix stale command references",
+    "Replace duplicate or contradictory subdirectory guidance",
+    "Repair CLAUDE.md symlink behavior"
+  ]
+}

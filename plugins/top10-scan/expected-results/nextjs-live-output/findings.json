@@ -1,0 +1,88 @@
+{
+  "findings": [
+    {
+      "rule_id": "design-review-A01-001",
+      "title": "Unauthenticated user API endpoint",
+      "category": "A01",
+      "severity": "HIGH",
+      "file": "app/api/users/route.ts",
+      "line": 3,
+      "cwe": [862],
+      "description": "The GET handler in app/api/users/route.ts has no authentication check. Any unauthenticated request can query user data by ID, exposing sensitive information without access control.",
+      "source": "design_review",
+      "recommendation": "Add session validation middleware or a NextAuth getServerSession() check at the top of the handler. Return 401 for unauthenticated requests."
+    },
+    {
+      "rule_id": "design-review-A01-002",
+      "title": "IDOR via user ID query parameter",
+      "category": "A01",
+      "severity": "HIGH",
+      "file": "app/api/users/route.ts",
+      "line": 5,
+      "cwe": [639],
+      "description": "User lookup accepts an arbitrary ID from query parameters without verifying that the requester owns or has permission to access that user record. Any authenticated or unauthenticated user can enumerate and access other users' data.",
+      "source": "design_review",
+      "recommendation": "After authentication, verify that the requested user ID matches the session user or that the requester has an admin role."
+    },
+    {
+      "rule_id": "design-review-A01-003",
+      "title": "Unauthenticated admin endpoint",
+      "category": "A01",
+      "severity": "CRITICAL",
+      "file": "app/api/admin/route.ts",
+      "line": 4,
+      "cwe": [862],
+      "description": "The admin panel endpoint at app/api/admin/route.ts has no authentication or authorization middleware. Both GET and POST handlers are publicly accessible, allowing anyone to view the admin dashboard and modify admin settings.",
+      "source": "design_review",
+      "recommendation": "Add authentication and admin role verification. Use NextAuth getServerSession() and check for admin role before processing requests."
+    },
+    {
+      "rule_id": "design-review-A05-001",
+      "title": "SQL string concatenation in user query",
+      "category": "A05",
+      "severity": "CRITICAL",
+      "file": "app/api/users/route.ts",
+      "line": 8,
+      "cwe": [89],
+      "description": "The user lookup query is built by concatenating the user ID directly into a SQL string. This allows SQL injection via the id query parameter.",
+      "source": "design_review",
+      "recommendation": "Use parameterized queries or an ORM. Replace string concatenation with prepared statements."
+    },
+    {
+      "rule_id": "design-review-A05-002",
+      "title": "Cross-site scripting via unsanitized HTML interpolation",
+      "category": "A05",
+      "severity": "HIGH",
+      "file": "app/api/admin/route.ts",
+      "line": 8,
+      "cwe": [79],
+      "description": "The admin endpoint interpolates the name query parameter directly into an HTML response using template literals. An attacker can inject arbitrary HTML and JavaScript via the name parameter, achieving reflected XSS.",
+      "source": "design_review",
+      "recommendation": "Sanitize or HTML-encode user input before including it in HTML responses. Use a templating library with auto-escaping or React server components instead of raw HTML strings."
+    },
+    {
+      "rule_id": "design-review-A07-001",
+      "title": "Weak JWT configuration with hardcoded secret",
+      "category": "A07",
+      "severity": "CRITICAL",
+      "file": "lib/auth.ts",
+      "line": 3,
+      "cwe": [798],
+      "description": "JWT tokens are signed with the hardcoded secret 'secret123' using HS256. The secret is trivially guessable, allowing any attacker to forge valid tokens. No token expiration is set, so forged tokens remain valid indefinitely.",
+      "source": "design_review",
+      "recommendation": "Use a strong, randomly generated secret stored in environment variables. Set token expiration (exp claim). Consider using RS256 with key pairs for production."
+    },
+    {
+      "rule_id": "design-review-A10-001",
+      "title": "Fail-open error handling with leaked error details",
+      "category": "A10",
+      "severity": "MEDIUM",
+      "file": "app/api/users/route.ts",
+      "line": 12,
+      "cwe": [755],
+      "description": "The catch block in the user query handler returns a 200 response with the full error message, including SQL error details. This leaks internal database structure to attackers and silently allows the request to succeed despite the error.",
+      "source": "design_review",
+      "recommendation": "Return a generic error message to the client. Log the detailed error server-side. Return an appropriate error status code (500) rather than 200."
+    }
+  ]
+}

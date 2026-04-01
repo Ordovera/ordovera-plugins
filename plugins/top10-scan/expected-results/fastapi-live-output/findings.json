@@ -1,0 +1,136 @@
+{
+  "findings": [
+    {
+      "rule_id": "design-review-A01-001",
+      "title": "Admin routes have no authentication dependency",
+      "category": "A01",
+      "severity": "CRITICAL",
+      "file": "app/main.py",
+      "line": 24,
+      "cwe": [862],
+      "description": "The admin router is included in the FastAPI app without any authentication dependency (Depends()). All admin endpoints including user listing and deletion are publicly accessible.",
+      "source": "design_review",
+      "recommendation": "Add a Depends() security dependency to the admin router or individual endpoints. Use OAuth2PasswordBearer or HTTPBearer for token validation."
+    },
+    {
+      "rule_id": "design-review-A01-002",
+      "title": "User endpoints lack ownership verification",
+      "category": "A01",
+      "severity": "HIGH",
+      "file": "app/routes/users.py",
+      "line": 12,
+      "cwe": [639],
+      "description": "The GET and PUT handlers for /users/{user_id} accept any user ID without verifying that the requester owns or has permission to access that record. Any user can read or modify any other user's profile.",
+      "source": "design_review",
+      "recommendation": "Add authentication dependency and verify that the authenticated user matches the requested user_id or has admin privileges."
+    },
+    {
+      "rule_id": "design-review-A02-001",
+      "title": "CORS allows all origins with credentials",
+      "category": "A02",
+      "severity": "HIGH",
+      "file": "app/main.py",
+      "line": 14,
+      "cwe": [942],
+      "description": "CORS middleware is configured with allow_origins=['*'] and allow_credentials=True. This combination allows any website to make authenticated cross-origin requests to the API, enabling CSRF-like attacks.",
+      "source": "design_review",
+      "recommendation": "Restrict allow_origins to specific trusted domains. Do not use '*' with allow_credentials=True."
+    },
+    {
+      "rule_id": "design-review-A02-002",
+      "title": "Debug mode enabled in production-style app",
+      "category": "A02",
+      "severity": "MEDIUM",
+      "file": "app/main.py",
+      "line": 10,
+      "cwe": [209],
+      "description": "The FastAPI app is initialized with debug=True, which exposes detailed error information including stack traces to clients.",
+      "source": "design_review",
+      "recommendation": "Set debug=False for production. Use environment variables to control debug mode per environment."
+    },
+    {
+      "rule_id": "design-review-A05-001",
+      "title": "SQL injection via f-string interpolation in user lookup",
+      "category": "A05",
+      "severity": "CRITICAL",
+      "file": "app/routes/users.py",
+      "line": 14,
+      "cwe": [89],
+      "description": "The user lookup query uses f-string interpolation to embed the user_id directly into a SQL string. An attacker can inject arbitrary SQL via the user_id path parameter.",
+      "source": "design_review",
+      "recommendation": "Use SQLAlchemy parameterized queries with bound parameters instead of f-string interpolation."
+    },
+    {
+      "rule_id": "design-review-A05-002",
+      "title": "SQL injection in user update",
+      "category": "A05",
+      "severity": "CRITICAL",
+      "file": "app/routes/users.py",
+      "line": 26,
+      "cwe": [89],
+      "description": "The update handler builds a SQL UPDATE statement using f-string interpolation with user-supplied name, bio, and user_id values. All three parameters are injectable.",
+      "source": "design_review",
+      "recommendation": "Use SQLAlchemy ORM operations or parameterized queries for all database writes."
+    },
+    {
+      "rule_id": "design-review-A05-003",
+      "title": "SQL injection in admin delete",
+      "category": "A05",
+      "severity": "CRITICAL",
+      "file": "app/routes/admin.py",
+      "line": 17,
+      "cwe": [89],
+      "description": "The admin delete endpoint builds a DELETE query using f-string interpolation with the user_id path parameter. Combined with the missing auth check, this allows unauthenticated arbitrary data deletion.",
+      "source": "design_review",
+      "recommendation": "Use parameterized queries and add authentication/authorization checks."
+    },
+    {
+      "rule_id": "design-review-A07-001",
+      "title": "MD5 used for password hashing",
+      "category": "A07",
+      "severity": "CRITICAL",
+      "file": "app/auth.py",
+      "line": 18,
+      "cwe": [327],
+      "description": "Passwords are hashed using MD5 (hashlib.md5), which is cryptographically broken for password storage. MD5 hashes can be reversed via rainbow tables or brute force in seconds.",
+      "source": "design_review",
+      "recommendation": "Use bcrypt, argon2, or scrypt via passlib. Replace hashlib.md5 with passlib.hash.bcrypt.hash()."
+    },
+    {
+      "rule_id": "design-review-A07-002",
+      "title": "JWT with hardcoded weak secret and no expiration",
+      "category": "A07",
+      "severity": "CRITICAL",
+      "file": "app/auth.py",
+      "line": 5,
+      "cwe": [798],
+      "description": "JWT tokens are signed with the hardcoded secret 'secret123' and have no expiration claim. Tokens are valid indefinitely and the secret is trivially guessable.",
+      "source": "design_review",
+      "recommendation": "Use a strong random secret from environment variables. Add an exp claim to all tokens. Consider short-lived access tokens with refresh token rotation."
+    },
+    {
+      "rule_id": "design-review-A10-001",
+      "title": "Database error details leaked to client",
+      "category": "A10",
+      "severity": "MEDIUM",
+      "file": "app/routes/users.py",
+      "line": 18,
+      "cwe": [209],
+      "description": "Exception handlers in the user routes return raw error messages including database error details to the client via str(e) in JSON responses. This leaks internal schema and query information.",
+      "source": "design_review",
+      "recommendation": "Return generic error messages to clients. Log detailed errors server-side."
+    },
+    {
+      "rule_id": "design-review-A10-002",
+      "title": "Bare except blocks swallow errors silently",
+      "category": "A10",
+      "severity": "MEDIUM",
+      "file": "app/routes/users.py",
+      "line": 31,
+      "cwe": [396],
+      "description": "Multiple bare except blocks catch and silently discard all exceptions, including the update handler and fetch-avatar endpoint. Errors are hidden, making debugging impossible and masking security issues.",
+      "source": "design_review",
+      "recommendation": "Catch specific exception types. Log all exceptions. Return appropriate error responses."
+    }
+  ]
+}

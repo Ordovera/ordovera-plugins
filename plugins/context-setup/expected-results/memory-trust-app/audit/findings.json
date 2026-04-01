@@ -1,0 +1,15 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-audit",
+  "status": "golden_baseline",
+  "required_findings": [
+    "Root AGENTS.md carries volatile workflow notes that should move into context/ files",
+    "Project has MCP and hook configuration but root guidance does not document those surfaces as operator-owned trust boundaries",
+    "MEMORY.md mostly duplicates durable project policy and stack notes instead of volatile working memory"
+  ],
+  "priority_recommendations": [
+    "Add a lightweight trust-boundary section for MCP and hooks",
+    "Move volatile migration and debugging notes out of the root AGENTS.md",
+    "Trim MEMORY.md down to short-lived execution context or remove it"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-audit",
+  "status": "golden_baseline",
+  "expected_category_statuses": {
+    "Level Appropriateness": "Partial",
+    "Structural Issues": "Partial",
+    "Trust Boundary Coverage": "Partial",
+    "Content Quality": "Partial"
+  }
+}

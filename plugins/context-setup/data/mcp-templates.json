@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "last_updated": "2026-04-01",
+  "general_principle": "CLI over MCP for reads (field selection, output piping, documented behavior). MCP for writes where output size does not matter, and services with no CLI equivalent.",
+  "templates": {
+    "atlassian": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["atlassian", "jira", "confluence"],
+      "tools": {
+        "searchJiraIssuesUsingJql": {
+          "optimization": "Use fields parameter to select only needed fields, limit maxResults",
+          "recommended_params": {"fields": ["summary", "status"], "maxResults": "3-5"},
+          "default_bloat": "Includes description, issuetype, priority, created -- roughly 2x payload per issue. Description fields on form-generated tickets can be hundreds of tokens each."
+        },
+        "searchConfluenceUsingCql": {
+          "optimization": "Use narrow CQL and limit parameter",
+          "recommended_params": {"limit": 5},
+          "notes": "Avoid expand unless you need page body content."
+        },
+        "getJiraIssue": {
+          "optimization": "Prefer over broad JQL search when you have the ticket number",
+          "notes": "Returns all fields by default."
+        }
+      }
+    },
+    "gmail": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["gmail"],
+      "tools": {
+        "gmail_search_messages": {
+          "optimization": "Use specific q filters and low maxResults",
+          "recommended_params": {"maxResults": "3-5"},
+          "notes": "Default is 20 results, each with headers, snippet, and metadata. Use q filters: from:, after:, subject:, is:unread."
+        },
+        "gmail_read_message": {
+          "optimization": "Prefer over gmail_read_thread when you need one message",
+          "notes": "Thread reads return every message in the conversation."
+        }
+      }
+    },
+    "google_calendar": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["google_calendar", "gcal"],
+      "tools": {
+        "gcal_list_events": {
+          "optimization": "Use tight timeMin/timeMax bounds and low maxResults",
+          "recommended_params": {"maxResults": "5-10"},
+          "notes": "Default is 50 results per page. Keep condenseEventDetails: true (default). Setting false adds full attendee lists, attachments, timestamps per event."
+        }
+      }
+    },
+    "web": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["web", "webfetch", "websearch"],
+      "tools": {
+        "WebFetch": {
+          "optimization": "Use a focused prompt parameter to control output size",
+          "notes": "No maxResults or limit parameters. The prompt is the only knob controlling output size."
+        },
+        "WebSearch": {
+          "optimization": "Use allowed_domains to narrow results",
+          "notes": "Result count is server-controlled with no limit parameter. Avoid chaining WebSearch into multiple WebFetch calls."
+        }
+      }
+    },
+    "github": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["github"],
+      "cli_preferred": true,
+      "cli_examples": {
+        "issue_view": "gh issue view <N> --json title,state (1 line vs 65 default)",
+        "pr_view": "gh pr view <N> --json title,state (1 line vs ~30 default)"
+      },
+      "tools": {
+        "get_issue": {
+          "optimization": "Prefer CLI gh issue view --json for reads",
+          "notes": "Returns ~100 lines (full body, user objects with 15+ URL fields, labels, reactions) vs 1 line from CLI with --json."
+        },
+        "list_issues": {
+          "optimization": "Use per_page parameter",
+          "recommended_params": {"per_page": 2},
+          "notes": "Returns ~200 lines with per_page: 2. No field filtering available via MCP."
+        }
+      }
+    },
+    "supabase": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["supabase"],
+      "tools": {
+        "list_tables": {
+          "optimization": "Use verbose: false (default)",
+          "notes": "verbose: true adds all columns, types, defaults, constraints -- ~20x larger."
+        },
+        "execute_sql": {
+          "optimization": "Always LIMIT results, select specific columns",
+          "notes": "SELECT id, status, created_at returns ~6x less than SELECT * on a typical 16-column table."
+        }
+      }
+    },
+    "vercel": {
+      "last_verified": "2026-04-01",
+      "match_patterns": ["vercel"],
+      "tools": {
+        "list_deployments": {
+          "optimization": "Use since/until timestamps to narrow results",
+          "notes": "Returns 20 items per page with verbose git metadata (~25 lines each). No limit parameter available."
+        },
+        "get_deployment_build_logs": {
+          "optimization": "Use limit parameter for quick checks",
+          "recommended_params": {"limit": "10-20"},
+          "notes": "Defaults to 100 lines. Full 100 only when debugging build failures."
+        },
+        "get_runtime_logs": {
+          "optimization": "Filter by level, environment, source, and time window",
+          "recommended_params": {"level": ["error"], "environment": "production"},
+          "notes": "Defaults to 50 entries (max 1000). Use tight since/until to avoid pulling all log levels."
+        }
+      }
+    }
+  }
+}

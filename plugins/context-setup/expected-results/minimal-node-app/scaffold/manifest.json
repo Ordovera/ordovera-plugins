@@ -1,0 +1,31 @@
+{
+  "fixture": "minimal-node-app",
+  "skill": "context-scaffold",
+  "status": "golden_baseline",
+  "recommendation": "minimal",
+  "expected_files": [
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "forbidden_files": [
+    "context/system-overview.md",
+    "src/api/AGENTS.md"
+  ],
+  "required_headings": [
+    "## Tech Stack",
+    "## Commands",
+    "## Code Standards",
+    "## Do NOT"
+  ],
+  "required_substrings": [
+    "TypeScript",
+    "vitest",
+    "eslint",
+    "["
+  ],
+  "forbidden_substrings": [
+    "## Data Model",
+    "## Auth and Permissions",
+    "## API Conventions"
+  ]
+}

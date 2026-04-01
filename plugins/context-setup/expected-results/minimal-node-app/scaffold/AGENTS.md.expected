@@ -1,0 +1,28 @@
+# AGENTS.md
+
+[One-sentence description of this small TypeScript utility application.]
+
+## Tech Stack
+
+- Node.js
+- TypeScript
+- Vitest
+- ESLint
+
+## Commands
+
+- `npm run dev`
+- `npm run build`
+- `npm run test`
+- `npm run lint`
+
+## Code Standards
+
+- Use TypeScript with strict settings.
+- Prefer ESM modules.
+- [Describe any project-specific naming or import conventions.]
+
+## Do NOT
+
+- [List files or directories that should not be modified without approval.]
+- [List patterns that are off-limits for this project.]

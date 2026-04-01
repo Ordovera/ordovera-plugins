@@ -1,0 +1,16 @@
+{
+  "vulnerabilities": [
+    {
+      "name": "lodash",
+      "version": "4.17.15",
+      "severity": "HIGH",
+      "cwe": [1321],
+      "title": "Prototype Pollution in lodash",
+      "recommendation": "Upgrade to 4.17.21",
+      "source": "sca"
+    }
+  ],
+  "stats": {"total": 1},
+  "tool_used": "npm audit",
+  "package_manager": "npm"
+}

@@ -1,0 +1,14 @@
+{
+  "findings": [
+    {
+      "rule_id": "sqli-concat",
+      "severity": "WARNING",
+      "message": "SQL query built with string concatenation",
+      "file": "app/api/users/route.ts",
+      "line": 8,
+      "cwe": [89],
+      "source": "sast"
+    }
+  ],
+  "stats": {"total": 1}
+}

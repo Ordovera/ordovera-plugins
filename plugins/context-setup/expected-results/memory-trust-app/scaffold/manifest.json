@@ -1,0 +1,30 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-scaffold",
+  "status": "golden_baseline",
+  "recommendation": "full_single_file",
+  "expected_files": [
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "required_headings": [
+    "## Tech Stack",
+    "## Commands",
+    "## MCP Tool Notes",
+    "## Trust Boundary Notes",
+    "## Code Standards",
+    "## Do NOT"
+  ],
+  "required_substrings": [
+    "github",
+    "sentry",
+    "operator-owned",
+    "MEMORY.md",
+    "short-lived working memory"
+  ],
+  "forbidden_substrings": [
+    "Current migration focus",
+    "running issue log",
+    "Linear"
+  ]
+}

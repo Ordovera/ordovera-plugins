@@ -1,0 +1,10 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-align",
+  "status": "golden_baseline",
+  "required_findings": [
+    "AGENTS.md says configured MCP servers are GitHub and Linear, but .mcp.json configures GitHub and Sentry",
+    "AGENTS.md references .claude/hooks/preflight.py, but .claude/settings.json points to scripts/hooks/preflight.py",
+    "MEMORY.md references context/session-memory.md, but that file does not exist"
+  ]
+}

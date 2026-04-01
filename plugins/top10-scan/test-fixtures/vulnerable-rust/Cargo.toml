@@ -1,0 +1,12 @@
+[package]
+name = "vulnerable-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# A03: Using an older version with known issues
+jsonwebtoken = "7.2.0"
+rusqlite = "0.29"

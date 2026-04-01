@@ -1,0 +1,51 @@
+# AGENTS.md
+
+[One-sentence description of this full-stack Next.js application and who it serves.]
+
+## Tech Stack
+
+- Next.js
+- React
+- TypeScript
+- NextAuth
+- Prisma with PostgreSQL
+
+## Commands
+
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
+- `npm run test`
+- `npm run db:generate`
+
+## Project Structure
+
+- `app/` contains routes, pages, and API handlers
+- `app/api/users/` contains API route handlers
+- `lib/` contains shared application helpers
+- `prisma/` contains the database schema
+
+## Architecture
+
+[Describe how requests flow from Next.js routes through auth and data access.]
+
+## Auth and Permissions
+
+- Authentication is handled with NextAuth.
+- [Describe session handling, protected routes, and role boundaries.]
+
+## Data Model
+
+- `User` is a core model in Prisma.
+- [Describe key relationships and ownership rules.]
+
+## API Conventions
+
+- API routes live under `app/api/`.
+- [Describe request/response patterns and error handling conventions.]
+
+## Do NOT
+
+- [List files or directories that should not be modified without approval.]
+- [List patterns that are off-limits for this project.]

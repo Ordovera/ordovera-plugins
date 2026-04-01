@@ -1,0 +1,11 @@
+{
+  "fixture": "stale-context-app",
+  "skill": "context-align",
+  "status": "golden_baseline",
+  "required_findings": [
+    "AGENTS.md references React 18 but package.json shows React 19",
+    "AGENTS.md references src/lib/auth/ but the path does not exist",
+    "architecture-decisions.md references npm run test:api but package.json has no test:api script",
+    "src/api/AGENTS.md conflicts with root AGENTS.md on test runner"
+  ]
+}

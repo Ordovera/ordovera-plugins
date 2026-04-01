@@ -1,0 +1,172 @@
+{
+  "A01": {
+    "category": "Broken Access Control",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Examine all API routes and middleware for:\n1. Missing or inconsistent authorization checks on endpoints\n2. Insecure Direct Object References (IDOR) - can users access resources by guessing IDs?\n3. Missing function-level access control - are admin functions protected?\n4. CORS misconfiguration allowing unauthorized origins\n5. Directory traversal vulnerabilities in file operations\n6. SSRF vectors in URL-fetching functionality (user-supplied URLs, webhooks, image proxies)\n7. JWT/session token validation gaps - are tokens verified on every request?",
+    "framework_hints": {
+      "nextjs": "Check middleware.ts for route protection gaps. Verify API routes in app/api/ all validate session. Check for missing revalidation of permissions in Server Components vs Client Components. Look for unprotected Server Actions.",
+      "express": "Check route handlers for missing auth middleware. Look for routes registered before auth middleware in the chain. Verify RBAC checks on admin routes. Check for wildcard CORS origins.",
+      "django": "Check views for missing @login_required or @permission_required decorators. Verify object-level permissions in DRF viewsets. Check for unprotected URL patterns. Review CORS_ALLOWED_ORIGINS settings.",
+      "rails": "Check controllers for missing before_action :authenticate_user! Look for skip_before_action that bypasses auth. Verify Pundit/CanCanCan policies. Check for unscoped ActiveRecord queries.",
+      "spring": "Check @PreAuthorize annotations on controller methods. Verify SecurityFilterChain configuration. Look for permitAll() on sensitive endpoints. Check CORS configuration in WebMvcConfigurer.",
+      "go": "Check middleware chain for auth handler ordering. Verify JWT validation in handlers. Look for unprotected routes in router setup. Check for missing context-based user verification.",
+      "php": "Check for missing auth middleware in route groups. Verify Gate/Policy usage in Laravel. Look for direct file access without authentication. Check for unscoped Eloquent queries.",
+      "fastapi": "Check for missing Depends() security dependencies on route functions. Verify OAuth2PasswordBearer or HTTPBearer token validation. Look for routes missing Security() or Depends() auth parameters. Check for unprotected path operation decorators.",
+      "aspnet": "Check for missing [Authorize] attributes on controllers and actions. Verify authorization policies in Program.cs/Startup.cs. Look for [AllowAnonymous] on sensitive endpoints. Check for missing IAuthorizationHandler implementations and policy-based auth."
+    }
+  },
+  "A02": {
+    "category": "Security Misconfiguration",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Audit the application configuration and deployment settings for:\n1. Default credentials, API keys, or secrets hardcoded in configuration files\n2. Unnecessary features enabled (debug mode, directory listing, admin panels in production)\n3. Missing or misconfigured security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)\n4. Overly permissive cloud/infrastructure configurations (S3 buckets, network policies)\n5. XML External Entity (XXE) processing enabled in XML parsers\n6. Verbose error messages exposing stack traces or internal paths in production\n7. Missing or weak TLS configuration, including outdated protocols or cipher suites",
+    "framework_hints": {
+      "nextjs": "Check next.config.js for headers() configuration. Verify NEXT_PUBLIC_ env vars do not leak secrets. Check for debug mode in production. Review Image domains and remote patterns for SSRF risk.",
+      "express": "Check for helmet middleware and its configuration. Verify express.static does not serve sensitive directories. Look for trust proxy misconfiguration. Check for missing rate limiting.",
+      "django": "Check DEBUG=True in production settings. Verify ALLOWED_HOSTS is not ['*']. Check SECURE_SSL_REDIRECT, SECURE_HSTS_SECONDS, SESSION_COOKIE_SECURE. Review INSTALLED_APPS for unnecessary debug apps.",
+      "rails": "Check config/environments/production.rb for config.consider_all_requests_local. Verify force_ssl setting. Check for exposed config/credentials.yml.enc key. Review initializers for insecure defaults.",
+      "spring": "Check application.properties/yml for actuator endpoint exposure. Verify spring.profiles.active is not dev in production. Check for exposed H2 console. Review server.error.include-stacktrace setting.",
+      "go": "Check for debug endpoints left in production builds. Verify TLS configuration in http.Server. Look for pprof handlers accessible without auth. Check for overly verbose error responses.",
+      "php": "Check display_errors and error_reporting in php.ini for production. Verify APP_DEBUG=false in .env. Check for exposed phpinfo() endpoints. Review open_basedir and disable_functions settings.",
+      "fastapi": "Check for debug=True in uvicorn/app startup. Verify CORS middleware origins are not set to ['*']. Look for sensitive data in OpenAPI docs (/docs, /redoc) exposed in production. Check for missing security headers middleware (starlette-secure-headers).",
+      "aspnet": "Check appsettings.json and appsettings.Production.json for debug settings. Verify CORS policy in Program.cs is not overly permissive. Look for exposed Swagger/OpenAPI in production. Check for missing UseHsts() and UseHttpsRedirection() in middleware pipeline."
+    }
+  },
+  "A03": {
+    "category": "Software Supply Chain Failures",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Analyze the software supply chain and dependency management for:\n1. Dependencies with known vulnerabilities (check CVE databases and advisory feeds)\n2. Missing lockfile integrity verification - are checksums validated during install?\n3. Typosquatting risk - are dependency names verified against known packages?\n4. CI/CD pipeline integrity - are build scripts and actions pinned to specific versions/hashes?\n5. Missing Software Bill of Materials (SBOM) generation capability\n6. Unsigned or unverified artifacts in the build and deployment pipeline\n7. Post-install scripts in dependencies that could run malicious code",
+    "framework_hints": {
+      "nextjs": "Run npm audit or yarn audit. Check for unpinned dependencies in package.json. Verify GitHub Actions use SHA-pinned versions. Check for postinstall scripts in node_modules. Review next.config.js plugins from third parties.",
+      "express": "Run npm audit. Check for wildcard version ranges in package.json. Verify package-lock.json is committed. Look for deprecated middleware packages. Check for native addon dependencies with build scripts.",
+      "django": "Run pip-audit or safety check. Verify requirements.txt uses pinned versions with hashes. Check for packages from non-PyPI sources. Review setup.py/pyproject.toml for build-time dependencies.",
+      "rails": "Run bundle audit. Check for git-sourced gems without ref pinning. Verify Gemfile.lock is committed. Look for gems with native extensions from untrusted sources. Check for binstubs integrity.",
+      "spring": "Run OWASP Dependency-Check or Snyk. Verify Maven/Gradle dependency checksums. Check for repositories beyond Maven Central. Review plugin versions in pom.xml. Check for SNAPSHOT dependencies in production.",
+      "go": "Run govulncheck. Verify go.sum is committed and complete. Check for replace directives pointing to local or mutable sources. Review indirect dependencies for known vulnerabilities.",
+      "php": "Run composer audit. Check for packages from non-Packagist repositories. Verify composer.lock is committed. Review post-install-cmd scripts. Check for abandoned packages with known issues.",
+      "fastapi": "Run pip-audit or safety check. Verify requirements.txt or pyproject.toml pins exact versions. Check for dependencies installed from git URLs without commit pinning. Review uvicorn and starlette versions for known CVEs.",
+      "aspnet": "Run dotnet list package --vulnerable. Verify NuGet package versions in .csproj files. Check for packages from non-NuGet feeds in nuget.config. Review transitive dependency vulnerabilities with dotnet-outdated."
+    }
+  },
+  "A04": {
+    "category": "Cryptographic Failures",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Review all cryptographic operations and data protection mechanisms for:\n1. Sensitive data transmitted in cleartext (HTTP, unencrypted database connections, plaintext logs)\n2. Use of weak or deprecated algorithms (MD5, SHA1 for security, DES, RC4, RSA < 2048-bit)\n3. Hardcoded encryption keys, secrets, or salts in source code\n4. Missing or weak password hashing (plaintext, unsalted, low iteration count)\n5. Improper TLS certificate validation or pinning\n6. Insufficient entropy in random number generation for security-critical operations\n7. Sensitive data stored unencrypted at rest (PII, credentials, tokens in databases or files)",
+    "framework_hints": {
+      "nextjs": "Check for sensitive data in client-side bundles. Verify API routes use HTTPS-only cookies. Look for JWT secrets in NEXT_PUBLIC_ variables. Check for crypto operations using Math.random() instead of crypto.randomBytes().",
+      "express": "Check for cookie-session without secure/httpOnly flags. Verify bcrypt or argon2 for password hashing with adequate rounds. Look for deprecated crypto.createCipher vs crypto.createCipheriv. Check TLS options in HTTPS server setup.",
+      "django": "Check PASSWORD_HASHERS configuration for strong algorithms. Verify SECRET_KEY is not committed. Check for django.contrib.sessions using cookie backend without encryption. Review DATABASES SSL settings.",
+      "rails": "Check has_secure_password usage and bcrypt cost factor. Verify Rails.application.credentials management. Look for Base64 encoding mistaken for encryption. Check ActiveRecord encryption configuration.",
+      "spring": "Check BCryptPasswordEncoder strength parameter. Verify JKS/PKCS12 keystore management. Look for String-based password storage. Check for javax.crypto usage with ECB mode. Review spring.datasource SSL properties.",
+      "go": "Check for use of crypto/md5 or crypto/sha1 in security contexts. Verify crypto/rand vs math/rand usage. Look for hardcoded keys in source. Check TLS config MinVersion is at least tls.VersionTLS12.",
+      "php": "Check for md5() or sha1() used for passwords instead of password_hash(). Verify openssl_encrypt uses authenticated modes (GCM). Look for mcrypt usage (deprecated). Check for PASSWORD_DEFAULT in password_hash().",
+      "fastapi": "Check for secrets stored in Pydantic Settings without .env protection. Verify passlib context uses bcrypt or argon2. Look for python-jose or PyJWT with weak algorithm or hardcoded secret. Check for sensitive data in Pydantic model responses (use response_model to exclude fields).",
+      "aspnet": "Check for DataProtection key management and storage. Verify ASP.NET Identity uses default password hasher (PBKDF2). Look for hardcoded connection strings or secrets in appsettings.json. Check for User Secrets or Azure Key Vault usage vs plaintext config."
+    }
+  },
+  "A05": {
+    "category": "Injection",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Scan all user input handling paths for injection vulnerabilities:\n1. SQL injection in database queries - are parameterized queries/prepared statements used consistently?\n2. Cross-Site Scripting (XSS) - is user input properly escaped in HTML, JavaScript, and attribute contexts?\n3. Command injection - are system calls constructed with user input without sanitization?\n4. LDAP injection in directory service queries\n5. Template injection (SSTI) - is user input rendered directly in server-side templates?\n6. NoSQL injection in MongoDB/document database queries\n7. Expression Language injection in logging frameworks or template engines",
+    "framework_hints": {
+      "nextjs": "Check for unsafe innerHTML usage with user input. Verify Server Actions sanitize inputs. Look for dynamic code evaluation with user data. Check for unsanitized URL parameters in dynamic routes. Review ORM queries in API routes.",
+      "express": "Check for string concatenation in SQL queries vs parameterized queries. Verify template engines auto-escape output. Look for child_process calls with unsanitized user input. Check for MongoDB query injection with $where or $regex.",
+      "django": "Check for raw() or extra() SQL with string formatting. Verify template auto-escaping is not disabled with safe filter or mark_safe on user input. Look for subprocess with user data. Check ORM filter kwargs from user input.",
+      "rails": "Check for find_by_sql or where with string interpolation. Verify ERB templates use escaped output tags. Look for system calls or backtick invocations with user input. Check for YAML.load vs YAML.safe_load.",
+      "spring": "Check for JPA @Query with string concatenation. Verify Thymeleaf uses th:text (escaped) not th:utext with user input. Look for Runtime.getRuntime() calls with user data. Check for SpEL expression injection in @Value annotations.",
+      "go": "Check for fmt.Sprintf in SQL query construction vs database/sql placeholders. Verify html/template is used over text/template for HTML output. Look for os.Command with unsanitized arguments. Check for GORM raw queries.",
+      "php": "Check for mysqli_query with string concatenation vs prepared statements. Verify Blade uses escaped output syntax with user input. Look for shell invocation functions with user data. Check for PDO prepared statements.",
+      "fastapi": "Check for f-string SQL queries vs SQLAlchemy parameterized queries. Verify Jinja2 templates auto-escape user input. Look for subprocess calls with user-controlled arguments. Check for raw database execute() with string formatting instead of bound parameters.",
+      "aspnet": "Check for raw SQL via ExecuteSqlRaw() or FromSqlRaw() with string interpolation. Verify Razor views use @Html.Encode or default encoding for user input. Look for Process.Start with user-controlled arguments. Check for LINQ injection in dynamic query construction."
+    }
+  },
+  "A06": {
+    "category": "Insecure Design",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Evaluate the application architecture and design patterns for security weaknesses:\n1. Missing rate limiting on authentication, password reset, and other sensitive operations\n2. Absence of threat modeling artifacts - are trust boundaries and data flows documented?\n3. Business logic flaws - can workflows be skipped, replayed, or manipulated?\n4. Missing defense-in-depth - does security rely on a single control point?\n5. Insecure file upload handling - missing type validation, size limits, or storage isolation\n6. Race conditions in critical operations (TOCTOU, double-spend, concurrent session manipulation)\n7. Missing abuse case handling - are negative test scenarios designed and tested?",
+    "framework_hints": {
+      "nextjs": "Check for missing rate limiting on API routes. Verify form submissions include CSRF tokens. Look for client-side-only validation without server-side verification. Check for unrestricted file uploads in Server Actions.",
+      "express": "Check for missing express-rate-limit on auth endpoints. Verify business logic cannot be bypassed by skipping middleware. Look for race conditions in concurrent request handling. Check for missing CSRF protection on state-changing routes.",
+      "django": "Check for missing django-ratelimit on views. Verify form validation is server-side, not just client-side. Look for transaction isolation issues in concurrent operations. Check for missing CsrfViewMiddleware exclusions.",
+      "rails": "Check for missing Rack::Attack rate limiting. Verify Strong Parameters are used consistently. Look for mass assignment vulnerabilities. Check for missing protect_from_forgery. Review ActiveJob for race conditions.",
+      "spring": "Check for missing @RateLimiter annotations. Verify @Valid annotations on all controller input DTOs. Look for @Transactional isolation level issues. Check for missing CSRF configuration in SecurityFilterChain.",
+      "go": "Check for missing rate limiting middleware. Verify input validation at handler boundaries. Look for goroutine race conditions in shared state. Check for missing mutex/channel synchronization in concurrent operations.",
+      "php": "Check for missing throttle middleware on auth routes. Verify Form Request validation is comprehensive. Look for race conditions in queue workers. Check for missing CSRF middleware exclusions on webhooks only.",
+      "fastapi": "Check for missing slowapi or custom rate limiting on auth endpoints. Verify Pydantic models enforce validation constraints (Field with min_length, regex, etc.). Look for race conditions in async endpoint handlers with shared state. Check for missing CSRF protection on cookie-authenticated endpoints.",
+      "aspnet": "Check for missing rate limiting middleware (AspNetCoreRateLimit). Verify model validation with DataAnnotations or FluentValidation. Look for race conditions in concurrent controller actions with shared state. Check for missing AntiForgery token validation on form POST endpoints."
+    }
+  },
+  "A07": {
+    "category": "Authentication Failures",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Audit all authentication mechanisms and session management for:\n1. Weak password policies - are minimum length, complexity, and breach-check requirements enforced?\n2. Missing multi-factor authentication on privileged accounts or sensitive operations\n3. Session fixation vulnerabilities - are session IDs regenerated after login?\n4. Credential stuffing protection - are brute force countermeasures in place?\n5. Insecure password recovery flows - are reset tokens time-limited and single-use?\n6. JWT implementation flaws - algorithm confusion, missing expiration, weak secrets\n7. Insecure storage of credentials - are passwords hashed with modern algorithms (bcrypt, argon2, scrypt)?",
+    "framework_hints": {
+      "nextjs": "Check NextAuth.js/Auth.js configuration for session strategy. Verify JWT secret strength and rotation. Look for missing session expiration. Check for credential provider without rate limiting. Review middleware auth checks.",
+      "express": "Check passport.js strategy configuration. Verify express-session settings (secret strength, resave, saveUninitialized). Look for missing session regeneration after login. Check for bcrypt rounds >= 12.",
+      "django": "Check AUTH_PASSWORD_VALIDATORS configuration. Verify SESSION_COOKIE_AGE and SESSION_EXPIRE_AT_BROWSER_CLOSE. Look for custom authentication backends with weak validation. Check PASSWORD_HASHERS ordering.",
+      "rails": "Check Devise configuration for lockable, timeoutable, and validatable modules. Verify has_secure_password bcrypt cost. Look for custom Warden strategies with weak auth. Check session store configuration.",
+      "spring": "Check UserDetailsService implementation for password encoding. Verify SecurityFilterChain session management configuration. Look for missing sessionFixation().migrateSession(). Check OAuth2 client configuration.",
+      "go": "Check password hashing implementation (golang.org/x/crypto/bcrypt). Verify session token generation uses crypto/rand. Look for missing session expiration in cookie/store configuration. Check JWT library for algorithm verification.",
+      "php": "Check password_hash() algorithm parameter. Verify Laravel Sanctum/Passport token expiration. Look for missing login throttling. Check for session regeneration after authentication with session_regenerate_id().",
+      "fastapi": "Check OAuth2PasswordBearer and OAuth2PasswordRequestForm usage. Verify python-jose JWT algorithm is explicit (not 'none'). Look for missing token expiration in JWT creation. Check for password hashing via passlib with strong algorithm (bcrypt, argon2).",
+      "aspnet": "Check ASP.NET Identity configuration for password policies (RequiredLength, RequireNonAlphanumeric, etc.). Verify cookie authentication options (ExpireTimeSpan, SlidingExpiration). Look for missing account lockout configuration. Check for JWT bearer token validation parameters."
+    }
+  },
+  "A08": {
+    "category": "Data Integrity Failures",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Review data integrity verification mechanisms across the application:\n1. Insecure deserialization of untrusted data - are deserialization inputs validated and restricted?\n2. Missing integrity checks on data received from external sources or APIs\n3. Unsigned or unverified webhooks and callbacks from third-party services\n4. Missing checksum or signature verification on downloaded files and updates\n5. Cookie or token tampering - are signed cookies and integrity-protected tokens used?\n6. Mass assignment vulnerabilities - can users modify fields they should not control?\n7. Missing data validation at trust boundaries between services",
+    "framework_hints": {
+      "nextjs": "Check for JSON.parse on untrusted input without validation. Verify webhook endpoints validate signatures (Stripe, GitHub, etc.). Look for missing zod/yup schema validation on API route inputs. Check for unprotected revalidation endpoints.",
+      "express": "Check for body-parser with extended mode parsing nested objects. Verify webhook signature validation middleware. Look for missing input schema validation (joi, zod, ajv). Check for cookie-parser without signed cookies.",
+      "django": "Check for unsafe deserialization of untrusted data (pickle, yaml). Verify Django REST Framework serializer validation. Look for missing HMAC verification on webhooks. Check for ModelSerializer fields without explicit field lists.",
+      "rails": "Check for Marshal.load or YAML.load on untrusted data. Verify Strong Parameters whitelist approach. Look for missing webhook signature verification. Check for accepts_nested_attributes_for with insufficient filtering.",
+      "spring": "Check for ObjectInputStream.readObject on untrusted data. Verify @RequestBody DTOs use @Valid with constraints. Look for missing webhook HMAC validation. Check for Jackson deserialization type handling configuration.",
+      "go": "Check for encoding/gob or encoding/json Unmarshal into interface types. Verify webhook signature verification in handlers. Look for missing struct validation tags. Check for yaml.Unmarshal without safe type constraints.",
+      "php": "Check for unserialize() on untrusted data. Verify webhook signature validation. Look for missing Form Request validation rules. Check for json_decode followed by direct property access without validation.",
+      "fastapi": "Check for pickle.loads or yaml.load on untrusted data. Verify webhook signature validation in route handlers. Look for Pydantic models with arbitrary_types_allowed=True accepting untrusted input. Check for missing response_model filtering sensitive fields from database models.",
+      "aspnet": "Check for BinaryFormatter or unsafe deserialization of untrusted data. Verify model binding does not over-post (use [Bind] or DTOs). Look for missing webhook HMAC validation. Check for JsonSerializer.Deserialize with permissive TypeNameHandling settings."
+    }
+  },
+  "A09": {
+    "category": "Security Logging and Monitoring Failures",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Assess the security logging, monitoring, and incident detection capabilities:\n1. Missing audit logs for authentication events (login, logout, failed attempts, password changes)\n2. Insufficient logging of authorization failures and access control violations\n3. Log injection vulnerabilities - is user input sanitized before being written to logs?\n4. Missing alerting on suspicious patterns (brute force, privilege escalation, unusual access)\n5. Sensitive data in logs (passwords, tokens, PII, credit card numbers)\n6. Missing centralized log aggregation and correlation capability\n7. Insufficient log retention and integrity protection (are logs tamper-evident?)",
+    "framework_hints": {
+      "nextjs": "Check for structured logging in API routes and middleware. Verify authentication events are logged. Look for console.log with sensitive data in production. Check for missing error boundary logging in React components.",
+      "express": "Check for morgan or winston logging middleware configuration. Verify auth middleware logs failed attempts. Look for req.body logged without sensitive field redaction. Check for missing error handling middleware that logs exceptions.",
+      "django": "Check LOGGING configuration in settings.py. Verify django.contrib.auth signals are logged. Look for sensitive data in django.request logger. Check for missing security-related log handlers (mail_admins, syslog).",
+      "rails": "Check config.log_level for production. Verify ActiveSupport::Notifications for security events. Look for filter_parameters configuration completeness. Check for missing Lograge or structured logging setup.",
+      "spring": "Check logback-spring.xml or log4j2 configuration. Verify Spring Security event publishing and logging. Look for sensitive data in @Slf4j debug output. Check for missing actuator audit events configuration.",
+      "go": "Check for structured logging (slog, zap, zerolog) vs fmt.Println. Verify HTTP middleware logs request metadata. Look for sensitive fields in log output. Check for missing panic recovery middleware with logging.",
+      "php": "Check Laravel logging channels configuration. Verify AuthenticationLog or similar event tracking. Look for sensitive data in Log::debug() calls. Check for missing failed job and exception logging configuration.",
+      "fastapi": "Check for structured logging setup (loguru, structlog) vs print statements. Verify authentication events are logged in security dependency functions. Look for sensitive data in logger.debug() output. Check for missing middleware that logs request/response metadata.",
+      "aspnet": "Check Serilog or ILogger configuration in Program.cs. Verify authentication events are logged via ILogger in Identity handlers. Look for sensitive data in log templates. Check for missing UseExceptionHandler and exception logging middleware."
+    }
+  },
+  "A10": {
+    "category": "Mishandling of Exceptional Conditions",
+    "version": "2025",
+    "auto_generated": false,
+    "prompt": "Examine error handling and exceptional condition management across the application:\n1. Uncaught exceptions that leak stack traces, internal paths, or configuration details to users\n2. Missing error handling in async operations - are promise rejections and goroutine panics caught?\n3. Fail-open behavior - do security controls default to allowing access when errors occur?\n4. Resource exhaustion handling - are timeouts, circuit breakers, and backpressure mechanisms in place?\n5. Missing input boundary validation - are integer overflows, buffer limits, and size constraints enforced?\n6. Inconsistent error responses that reveal system internals through timing or content differences\n7. Missing graceful degradation - does the system handle partial failures without cascading?",
+    "framework_hints": {
+      "nextjs": "Check error.tsx boundary implementations for information leakage. Verify Server Action try/catch blocks return safe error messages. Look for unhandled promise rejections in API routes. Check for missing loading.tsx and not-found.tsx handlers.",
+      "express": "Check for error handling middleware at the end of the middleware chain. Verify async route handlers are wrapped with try/catch or express-async-errors. Look for process uncaughtException handlers. Check for missing timeout middleware.",
+      "django": "Check custom error handler views (handler400, handler403, handler404, handler500). Verify middleware exception handling. Look for bare except clauses that swallow errors silently. Check for missing database connection timeout settings.",
+      "rails": "Check rescue_from handlers in ApplicationController. Verify ActiveJob retry and discard policies. Look for rescue StandardError with insufficient handling. Check for missing database connection pool timeout configuration.",
+      "spring": "Check @ControllerAdvice and @ExceptionHandler implementations. Verify @Async exception handling with AsyncUncaughtExceptionHandler. Look for @Transactional without proper rollback rules. Check for missing circuit breaker (Resilience4j) configuration.",
+      "go": "Check for unchecked error returns (golangci-lint errcheck). Verify panic recovery middleware in HTTP handlers. Look for goroutine panics without recover(). Check for missing context.WithTimeout in external service calls.",
+      "php": "Check exception handler render method for information leakage. Verify queue job failed() method implementations. Look for empty catch blocks that hide errors. Check for missing database and Redis connection timeout configuration.",
+      "fastapi": "Check for bare except or except Exception blocks that swallow errors. Verify custom exception handlers return safe error responses. Look for unhandled async task exceptions. Check for missing httpx/aiohttp timeout configuration on external calls. Verify Pydantic ValidationError responses do not leak internal schema details.",
+      "aspnet": "Check for UseExceptionHandler and UseDeveloperExceptionPage configuration per environment. Verify async controller actions handle OperationCanceledException. Look for catch blocks that return raw exception messages. Check for missing HttpClient timeout and Polly retry policies. Verify ProblemDetails responses do not include stack traces in production."
+    }
+  }
+}

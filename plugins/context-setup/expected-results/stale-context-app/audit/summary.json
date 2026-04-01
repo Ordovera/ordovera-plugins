@@ -1,0 +1,11 @@
+{
+  "fixture": "stale-context-app",
+  "skill": "context-audit",
+  "status": "golden_baseline",
+  "expected_category_statuses": {
+    "Level Appropriateness": "Partial",
+    "Format and Conventions": "Partial",
+    "Structural Issues": "Partial",
+    "Content Quality": "Partial"
+  }
+}

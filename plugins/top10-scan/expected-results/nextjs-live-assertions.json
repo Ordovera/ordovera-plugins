@@ -1,0 +1,14 @@
+{
+  "fixture": "vulnerable-nextjs",
+  "skill": "design-review",
+  "mode": "live",
+  "minimum_finding_count": 5,
+  "required_categories": ["A01", "A05", "A07", "A10"],
+  "required_signals": [
+    "auth",
+    "SQL",
+    "JWT",
+    "secret",
+    "error"
+  ]
+}

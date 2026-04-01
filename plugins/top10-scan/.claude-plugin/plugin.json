@@ -1,0 +1,8 @@
+{
+  "name": "top10-scan",
+  "description": "OWASP Top 10:2025 multi-layer security audit with Opengrep, ZAP, and design review",
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  }
+}

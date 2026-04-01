@@ -7,6 +7,10 @@ description: Analyzes an existing project and generates context files (AGENTS.md
 
 Analyze your project and generate the right context files pre-populated with what can be auto-detected. Sections that require human input get bracket placeholders.
 
+## Reference Data
+
+Detection markers, complexity levels, and section specifications are defined in structured data files under `<plugin_dir>/data/`. See `detection-markers.json` and `complexity-levels.json` for the authoritative definitions. The instructions below describe how to apply them.
+
 ## What This Skill Does
 
 1. **Discover project state:**
@@ -18,11 +22,13 @@ Analyze your project and generate the right context files pre-populated with wha
    - Identify testing setup: test runner config, test directories, test scripts
    - Detect multiple backing services: count distinct service client packages (e.g., supabase + jira, prisma + stripe, aws-sdk + firebase). If 2+ detected, flag for Integration Map section.
    - Detect MCP server configs: check `.mcp.json`, `.vscode/mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`, `.gemini/settings.json` at the project level. Match detected servers against known templates (Atlassian, Gmail, Google Calendar, Web, GitHub, Supabase, Vercel). If any are found, include an MCP Tool Notes section in the generated output.
+   - Detect trust-adjacent automation: `.claude/settings.json`, `.claude/hooks/`, referenced hook scripts, and equivalent operator-owned config. If found, generate a lightweight trust-boundary section or placeholder rather than treating these files as invisible implementation detail.
+   - Detect `MEMORY.md` if present. Treat it as an existing optional artifact to reconcile with generated context, not as the primary format to adopt.
 
 2. **Determine complexity level.** Present a recommendation with rationale, let the user choose:
    - **Minimal** (~40 lines): Solo project, single language, straightforward structure. One deployment target, no auth layer, no multi-service architecture.
-   - **Full single file** (~100-120 lines): Multi-layer app (frontend + backend), auth system, database, API with conventions worth documenting. Multiple backing services (database + external APIs). Still a single deployable unit.
-   - **Cascading + context directory**: Multiple projects or workspaces, team environment, complex architecture with distinct subsystems. Or a single project large enough that a single file would exceed ~150 lines.
+   - **Full single file** (~100-120 lines): Multi-layer app (frontend + backend), auth system, database, API with conventions worth documenting. Multiple backing services (database + external APIs). Still a single deployable unit. Also appropriate when the project has meaningful trust surfaces (MCP, hooks, operator-owned automation) but not enough architectural depth to warrant a `context/` split.
+   - **Cascading + context directory**: Multiple projects or workspaces, team environment, complex architecture with distinct subsystems. Or a single project large enough that a single file would exceed ~150 lines. Prefer this level when the root file is at risk of becoming a dump of volatile migration notes, current-session context, or operational detail that should instead live in subordinate files.
 
 3. **Generate files** based on the chosen level (templates below).
 
@@ -30,6 +36,7 @@ Analyze your project and generate the right context files pre-populated with wha
    - Create `CLAUDE.md` symlink: `ln -s AGENTS.md CLAUDE.md`
    - List what was created
    - Highlight sections with bracket placeholders that need human review
+   - If `MEMORY.md` already exists, call it out explicitly: keep it only if it holds short-lived working memory, and move durable policy or architecture back into `AGENTS.md` / `context/`
 
 ## Templates
 
@@ -58,6 +65,17 @@ Generate a single `AGENTS.md` with these sections. Populate from discovered info
 
 [For unknown servers:]
 - **[server name]** -- [run `/context-setup:context-mcp` for optimization recommendations for this server]
+
+## Trust Boundary Notes
+
+[Generate this section when trust-adjacent automation is detected: MCP config, Claude hook settings, hook scripts, or similar operator-owned tooling.]
+
+- [Document which automation surfaces exist and where they are configured.]
+- [State that these surfaces are operator-owned and should not be changed casually without approval.]
+- [Explain any known expectations about how agents should use configured tools or hooks.]
+
+[If MCP or hooks are present but details cannot be inferred safely, use a placeholder such as:]
+- [Document your trust boundary here: which MCP servers, hooks, or local automation agents may rely on, and which of those should not be changed without approval.]
 
 ## Code Standards
 
@@ -92,6 +110,17 @@ Generate a single `AGENTS.md` with all minimal sections plus the following. Popu
 ## MCP Tool Notes
 
 [Same logic as the minimal template: generate only if MCP configs detected, use known templates for recognized servers, placeholder for unknown servers. Include the CLI-first preamble from the minimal template. At the full level, this section sits between Command Output Notes and Project Structure -- the same position used in the single-file examples.]
+
+## Trust Boundary Notes
+
+[Generate this section when trust-adjacent automation is detected: MCP config, Claude hook settings, hook scripts, CI-enforced local automation, or similar operator-owned tooling.]
+
+- [Identify the automation surfaces and their config locations.]
+- [State that MCP selection, credentials, hook behavior, and operator-local tooling are not routine edit targets unless explicitly asked.]
+- [Describe any stable expectations agents should know, such as "hooks may block writes" or "MCP servers are available for reads but are operator-configured".]
+
+[If the project already has `MEMORY.md`, add one short note here or in a nearby section:]
+- [This repo also has `MEMORY.md`; keep it for short-lived working memory only. Durable rules belong in AGENTS.md or `context/` files.]
 
 ## Project Structure
 
@@ -150,11 +179,13 @@ Not every route goes through the default database. Before creating a new API rou
 
 Generate the following file set:
 
-**Project-root `AGENTS.md`** -- Entry point. Contains: project description, tech stack summary, commands, code standards, Do NOT section, and a note pointing to `context/` for architectural detail. Keep this file under 60 lines.
+**Project-root `AGENTS.md`** -- Entry point. Contains: project description, tech stack summary, commands, code standards, Do NOT section, trust-boundary summary when relevant, and a note pointing to `context/` for architectural detail. Keep this file under 60 lines. This file should be durable across long sessions: no sprint logs, migration diaries, or bulky troubleshooting notes.
 
 **`context/system-overview.md`** -- What the system does at a high level. Business context, user-facing functionality, key workflows. This is the "what" that AGENTS.md doesn't cover.
 
 **`context/architecture-decisions.md`** -- Why the system is built this way. Key technical choices and their rationale. Framework selection, database choice, auth approach, deployment architecture, and the reasoning behind each.
+
+**`context/operational-boundaries.md`** -- Generate this file when trust-adjacent automation is detected or clearly likely to matter. Document MCP servers, hooks, operator-owned local automation, and any expectations about how agents should use or avoid changing those surfaces.
 
 **`context/technical-requirements.md`** -- Non-functional requirements: performance targets, security requirements, accessibility standards, browser/device support, compliance requirements. Only include sections relevant to the project.
 
@@ -170,12 +201,21 @@ Generate the following file set:
 
 Each subdirectory file should contain only what's specific to that area. Do not duplicate project-root content.
 
+If `MEMORY.md` already exists:
+
+- do not replace `AGENTS.md` with it
+- do not generate a new `MEMORY.md` by default
+- mention in the output summary that it was detected
+- recommend trimming it to volatile execution context if it duplicates durable policy or architecture
+
 ## Key Constraints
 
 - Never fabricate project information. If something can't be detected, use a bracket placeholder. `[describe your auth mechanism]` is better than a wrong guess.
 - Populate sections from config files and directory structure, not from reading application code. Scanning code for architectural patterns is unreliable and slow.
 - The CLAUDE.md symlink is required. Always create it.
 - Bracket placeholders should describe the *kind* of content that belongs there, not just say `[TODO]`. Write `[describe how requests flow from route handler to database and back]` not `[fill in later]`.
+- Keep the root file as an entrypoint, not a dump. If generated content starts to exceed that role, prefer a `context/` file over stuffing more volatility into `AGENTS.md`.
+- `AGENTS.md` stays primary. `CLAUDE.md` is the compatibility surface. `MEMORY.md`, when present, is optional and secondary.
 
 ## When to Use
 
@@ -194,6 +234,8 @@ Each subdirectory file should contain only what's specific to that area. Do not 
 >
 > **MCP servers:** `.mcp.json` found with 2 servers (supabase, github-mcp-server). Both match known templates -- MCP Tool Notes will be pre-populated.
 >
+> **Trust surfaces:** `.claude/settings.json` found with a pre-tool hook. Trust Boundary Notes will be added so operator-owned automation is documented explicitly.
+>
 > **Recommendation: Full single file.** This is a single deployable app with enough layers (frontend, API, database, auth) to benefit from the expanded template, but not complex enough to warrant a context directory. One AGENTS.md covers it.
 >
 > Want to proceed with full single file, or choose a different level?
@@ -209,6 +251,7 @@ After generation:
 >
 > - **Architecture:** data flow description (line 58)
 > - **Auth and Permissions:** role definitions (line 74)
+> - **Trust Boundary Notes:** confirm which MCP and hook surfaces are operator-owned (line 42)
 > - **Do NOT:** all entries are starter defaults -- review and customize (lines 98-104)
 
 ## Notes
@@ -218,3 +261,5 @@ This skill generates context files; it doesn't maintain them. After generating, 
 The complexity recommendation is a starting point, not a rule. A small project with unusual architecture might benefit from the full template. A large project with simple patterns might only need the minimal one. The recommendation is based on heuristics (directory count, dependency count, presence of auth/database layers), but the user makes the final call.
 
 Bracket placeholders are intentional friction. They mark sections where auto-detection isn't reliable enough and human knowledge is required. Resist the temptation to fill them with guesses from code scanning -- a placeholder that says "describe your auth flow" prompts the human to write the accurate version.
+
+Long-session survivability matters. If the repo has enough detail that the root file stops being a compact always-loadable entrypoint, prefer cascading output and push volatile detail into `context/`.

@@ -1,0 +1,17 @@
+{
+  "name": "minimal-node-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}

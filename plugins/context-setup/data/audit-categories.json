@@ -1,0 +1,151 @@
+{
+  "schema_version": "1.0",
+  "description": "Audit category definitions used by context-audit for structured evaluation.",
+  "categories": [
+    {
+      "name": "Level Appropriateness",
+      "description": "Whether context complexity matches project complexity.",
+      "checks": {
+        "under_documented": [
+          "Multiple distinct layers but only a minimal AGENTS.md",
+          "More than 10 top-level directories with no project structure section",
+          "Auth packages present but no auth section",
+          "Multiple package manager configs (monorepo) but no cascading files",
+          "More than 3 contributors (git log) but no working style documentation"
+        ],
+        "over_engineered": [
+          "Context directory with 5+ files for a project with fewer than 20 source files",
+          "Subdirectory AGENTS.md files in a project with a flat structure",
+          "Cascading setup for a single-person, single-language project",
+          "Multiple context files that mostly repeat the same information"
+        ]
+      }
+    },
+    {
+      "name": "Section Completeness",
+      "description": "Whether required sections are present for the current context level.",
+      "checks_per_level": {
+        "minimal": [
+          "Project description",
+          "Tech stack",
+          "Commands",
+          "Code standards",
+          "Do NOT section"
+        ],
+        "full": [
+          "Project structure",
+          "Architecture",
+          "Auth and permissions (if auth packages present)",
+          "Data model (if database/ORM packages present)",
+          "API conventions (if API routes exist)",
+          "Integration map (if 2+ service client packages)"
+        ],
+        "cascading": [
+          "Root AGENTS.md as entry point (under ~60 lines)",
+          "Context directory with system overview and architecture decisions",
+          "Root guidance stays durable across long sessions",
+          "Subdirectory AGENTS.md only where distinct patterns exist",
+          "No content duplication between levels"
+        ]
+      }
+    },
+    {
+      "name": "Format and Conventions",
+      "description": "Adherence to context engineering conventions.",
+      "checks": [
+        "AGENTS.md exists as primary file",
+        "CLAUDE.md is symlink to AGENTS.md (not duplicate)",
+        "MEMORY.md treated as optional working memory if present",
+        "Do NOT entries are specific and actionable",
+        "Commands match actual executable scripts",
+        "No bracket placeholders remaining in non-template files",
+        "Consistent markdown headings (H2 for main sections)"
+      ]
+    },
+    {
+      "name": "Structural Issues",
+      "description": "Common structural problems in context files.",
+      "checks": [
+        "Duplicate subdirectory files (repeat root content)",
+        "Empty context files (headings only, no content)",
+        "Cascading contradictions (test runner, linter, package manager, framework version, import style, Do NOT boundaries)",
+        "Missing coverage for directories with distinct patterns",
+        "Orphaned references to non-existent files or directories",
+        "Overloaded root guidance (volatile migration notes, sprint state)",
+        "Misused MEMORY.md (duplicates AGENTS.md or permanent policy)"
+      ]
+    },
+    {
+      "name": "Content Quality",
+      "description": "Content-level problems across context files.",
+      "checks": [
+        "Vague boundaries (Do NOT entries not actionable enough)",
+        "Stale framework references (tech stack vs installed deps)",
+        "Missing symlink (CLAUDE.md is regular file or missing)",
+        "Overly long root file (exceeds ~150 lines)",
+        "Missing integration map (2+ service client packages but no mapping)",
+        "Missing long-session design (enough complexity for context/ split but root carries everything)"
+      ]
+    },
+    {
+      "name": "MCP Tool Notes Cross-Reference",
+      "description": "Whether MCP servers are configured but undocumented.",
+      "checks": [
+        "Scan project-level MCP configs (.mcp.json, .codex/config.toml, .gemini/settings.json, .vscode/mcp.json, .cursor/mcp.json)",
+        "Flag if MCP config found but no MCP Tool Notes section in AGENTS.md",
+        "Flag if MCP Tool Notes exists but is still bracket placeholders",
+        "Skip silently if no MCP configs found"
+      ]
+    },
+    {
+      "name": "Trust Boundary Coverage",
+      "description": "Whether operator-owned automation surfaces are acknowledged.",
+      "checks": [
+        "Scan for .mcp.json, .claude/settings.json, .claude/hooks/, .codex/config.toml, .cursor/, hook scripts",
+        "Flag if present but root context lacks trust-boundary guidance",
+        "Flag if context mentions MCP/hooks only as tools, not as trust surfaces",
+        "Flag if root guidance implies agents may freely edit operator-owned automation"
+      ]
+    },
+    {
+      "name": "Command Output Optimization",
+      "description": "Whether CLI commands could produce less output.",
+      "structural_checks": [
+        "Commands section exists but no Command Output Notes (for full level or higher)",
+        "Command Output Notes exists but is still bracket placeholders"
+      ],
+      "tool_recommendations": {
+        "vitest": {
+          "quick": "npx vitest run 2>&1 | tail -5",
+          "debug": "npx vitest run 2>&1 | tail -40"
+        },
+        "jest": {
+          "quick": "npx jest --silent 2>&1 | tail -5",
+          "debug": "npx jest --verbose 2>&1 | tail -40"
+        },
+        "pytest": {
+          "quick": "pytest -q --no-header 2>&1 | tail -3",
+          "debug": "pytest -q --tb=short"
+        },
+        "eslint_v8": {
+          "compact": "eslint --format compact ."
+        },
+        "eslint_v9": {
+          "compact": "eslint . 2>&1 | head -30"
+        },
+        "cargo": {
+          "compact": "cargo build --message-format=short 2>&1"
+        },
+        "clippy": {
+          "compact": "cargo clippy --message-format=short 2>&1"
+        },
+        "ruff": {
+          "compact": "ruff check --output-format concise ."
+        },
+        "tsc": {
+          "compact": "npx tsc --noEmit 2>&1 | head -20"
+        }
+      }
+    }
+  ]
+}
