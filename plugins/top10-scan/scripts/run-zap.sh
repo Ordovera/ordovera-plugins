@@ -74,11 +74,21 @@ fi
 ZAP_EXIT=0
 
 if [[ "$ZAP_MODE" == "docker" ]]; then
+  # Rewrite localhost/127.0.0.1 for Docker networking
+  DOCKER_TARGET="$TARGET_URL"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    DOCKER_TARGET="${DOCKER_TARGET//localhost/host.docker.internal}"
+    DOCKER_TARGET="${DOCKER_TARGET//127.0.0.1/host.docker.internal}"
+  fi
+  if [[ "$DOCKER_TARGET" != "$TARGET_URL" ]]; then
+    echo "Rewriting URL for Docker networking: ${TARGET_URL} -> ${DOCKER_TARGET}" >&2
+  fi
+
   # Docker-based ZAP scan
-  DOCKER_CMD="docker run --rm -v ${TMPDIR_OUT}:/zap/wrk zaproxy/zap-stable ${ZAP_SCRIPT} -t ${TARGET_URL} -J report.json"
+  DOCKER_CMD="docker run --rm -v ${TMPDIR_OUT}:/zap/wrk zaproxy/zap-stable ${ZAP_SCRIPT} -t ${DOCKER_TARGET} -J report.json"
 
   if [[ -n "$ZAP_EXTRA_OPTS" ]]; then
-    DOCKER_CMD="docker run --rm -v ${TMPDIR_OUT}:/zap/wrk zaproxy/zap-stable ${ZAP_SCRIPT} -t ${TARGET_URL} -J report.json -z \"-config spider.maxDuration=5\""
+    DOCKER_CMD="docker run --rm -v ${TMPDIR_OUT}:/zap/wrk zaproxy/zap-stable ${ZAP_SCRIPT} -t ${DOCKER_TARGET} -J report.json -z \"-config spider.maxDuration=5\""
   fi
 
   eval "$DOCKER_CMD" >/dev/null 2>&1 || ZAP_EXIT=$?

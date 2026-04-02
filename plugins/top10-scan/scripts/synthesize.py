@@ -411,7 +411,7 @@ def render_finding(f):
     if f.get("multi_layer_confirmed"):
         lines.append("| Confirmed By | {} |".format(f.get("confirmed_sources", "Multiple layers")))
     lines.append("")
-    lines.append("**Description:** {}\n".format(f.get("description", f.get("message", "N/A"))))
+    lines.append("**Description:** {}\n".format(f.get("description", f.get("title", f.get("message", "N/A")))))
 
     snippet = f.get("snippet", "")
     if snippet:
@@ -431,6 +431,10 @@ def build_attack_surface_section(attack_surface):
 
     lines = []
     endpoints = attack_surface.get("endpoints", [])
+    if not isinstance(endpoints, list):
+        if isinstance(endpoints, int):
+            lines.append("**Endpoints:** {}".format(endpoints))
+        endpoints = []
     if endpoints:
         lines.append("**Endpoints:** {}".format(len(endpoints)))
         auth_count = sum(1 for e in endpoints if e.get("auth_required"))

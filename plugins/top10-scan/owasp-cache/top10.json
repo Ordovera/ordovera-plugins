@@ -13,7 +13,7 @@
     {
       "id": "A02",
       "name": "Security Misconfiguration",
-      "cwes": [2, 11, 13, 15, 16, 209, 260, 315, 520, 526, 537, 541, 547, 611, 614, 756, 776, 942, 1004, 1032],
+      "cwes": [2, 11, 13, 15, 16, 209, 260, 315, 520, 524, 526, 537, 541, 547, 611, 614, 615, 693, 756, 776, 942, 1004, 1032],
       "description": "Missing or incorrect security hardening across the application stack, including default credentials, unnecessary features enabled, overly permissive cloud configurations, and missing security headers.",
       "changed_from_2021": "Moved from A05:2021 to A02:2025"
     },
@@ -41,7 +41,7 @@
     {
       "id": "A06",
       "name": "Insecure Design",
-      "cwes": [73, 183, 209, 213, 235, 256, 257, 266, 269, 280, 311, 312, 313, 316, 419, 430, 434, 444, 451, 472, 501, 522, 525, 539, 579, 598, 602, 642, 646, 650, 653, 656, 657, 799, 807, 840, 841, 927, 1021, 1173],
+      "cwes": [73, 183, 209, 213, 235, 256, 257, 266, 269, 280, 311, 312, 313, 316, 419, 430, 434, 444, 451, 472, 501, 522, 525, 539, 579, 598, 602, 642, 646, 650, 653, 656, 657, 749, 770, 799, 807, 840, 841, 927, 1021, 1173],
       "description": "Flaws in the design and architecture of the application rather than implementation bugs. Includes missing threat modeling, insecure business logic, and lack of defense-in-depth patterns.",
       "changed_from_2021": "Moved from A04:2021 to A06:2025"
     },
