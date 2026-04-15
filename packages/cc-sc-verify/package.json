@@ -1,0 +1,33 @@
+{
+  "name": "cc-sc-verify",
+  "version": "0.1.0",
+  "description": "Supply chain integrity checker for Claude Code plugins. Verifies installed plugins against their source repos for tampering, version drift, repo deletion, and tool definition changes.",
+  "type": "module",
+  "bin": {
+    "cc-sc-verify": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "claude-code",
+    "supply-chain",
+    "security",
+    "plugin-integrity",
+    "verification",
+    "ai-governance"
+  ],
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}
