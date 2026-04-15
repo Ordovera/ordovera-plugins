@@ -1,3 +1,5 @@
 context
 .DS_Store
 *.sln
+node_modules
+dist
