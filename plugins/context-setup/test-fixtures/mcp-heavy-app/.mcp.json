@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "atlassian": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/claude-ai-atlassian"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server"]
+    },
+    "sentry": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sentry"]
+    }
+  }
+}

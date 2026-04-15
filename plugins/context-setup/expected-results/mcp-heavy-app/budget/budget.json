@@ -1,0 +1,32 @@
+{
+  "fixture": "mcp-heavy-app",
+  "skill": "context-budget",
+  "status": "golden_baseline",
+  "required_components": [
+    "CLAUDE.md chain",
+    "MCP tool descriptions",
+    "Auto-memory index"
+  ],
+  "expected_context_files": {
+    "agents_md": true,
+    "claude_md": true,
+    "memory_md": true,
+    "context_dir": true
+  },
+  "expected_mcp_servers": {
+    "count_project": 4,
+    "count_editor": 2,
+    "count_unique": 5,
+    "names": ["atlassian", "github", "supabase", "sentry", "vercel"]
+  },
+  "expected_hooks": {
+    "count": 2,
+    "matchers": ["Write|Edit", "Bash"]
+  },
+  "expected_diagnosis": "pressure",
+  "pressure_signals": [
+    "5 unique MCP servers across 2 config sources",
+    "github server configured in both .mcp.json and .vscode/mcp.json"
+  ],
+  "diagnosis_notes": "mcp-heavy-app has 5 unique MCP servers (high tool description cost), 2 hooks, cascading context files, and memory. Context budget should flag MCP tool description cost and note the duplicate github server."
+}

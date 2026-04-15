@@ -1,0 +1,18 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-mcp",
+  "mode": "inventory",
+  "status": "golden_baseline",
+  "expected_sources": [
+    {
+      "config_file": ".mcp.json",
+      "platform": "Claude Code",
+      "scope": "project",
+      "servers": ["github", "sentry"]
+    }
+  ],
+  "expected_server_count": 2,
+  "expected_unique_servers": ["github", "sentry"],
+  "cross_platform_overlaps": [],
+  "notes": "memory-trust-app has only project-level .mcp.json with 2 servers. No editor-level or user-level configs. No overlaps."
+}

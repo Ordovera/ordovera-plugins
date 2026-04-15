@@ -66,12 +66,13 @@ Live assertions live under `expected-results/<fixture>/scaffold-live/assertions.
 
 ## Fixture Suite
 
-Fixtures live under `test-fixtures/`:
+Fixtures live under `test-fixtures/`. See `test-fixtures/README.md` for fixture design rationale, intentional defects, and which expected results each fixture feeds.
 
-- `minimal-node-app/` -- small single-package TypeScript app for minimal scaffold recommendations
-- `fullstack-app/` -- single deployable full-stack app with API, auth, and data-model signals
-- `stale-context-app/` -- project with intentionally stale and contradictory context files for audit and align verification
-- `memory-trust-app/` -- project with MCP config, hook config, and an intentionally overused `MEMORY.md` for trust-boundary and long-session verification
+- `minimal-node-app/` -- scaffold restraint (simple project)
+- `fullstack-app/` -- scaffold completeness (complex project)
+- `stale-context-app/` -- audit and align (stale references, contradictions)
+- `memory-trust-app/` -- trust boundaries, MEMORY.md misuse, budget (healthy), inventory (simple)
+- `mcp-heavy-app/` -- budget (pressure), inventory (multi-source, overlap)
 
 Expected results live under `expected-results/`.
 
@@ -81,6 +82,8 @@ Golden baselines exist for:
 - Audit: `stale-context-app`, `memory-trust-app`
 - Align: `stale-context-app`, `memory-trust-app`
 - Upgrade: `memory-trust-app`
+- Budget: `memory-trust-app`, `mcp-heavy-app`
+- MCP inventory: `memory-trust-app`, `mcp-heavy-app`
 
 ## What Counts As A Regression
 
@@ -117,7 +120,7 @@ For substantial skill changes:
 The verification model does not yet:
 
 - Cover `context-audit`, `context-align`, or `context-upgrade` with live output verification
-- Cover `context-mcp` or `context-usage` with any verification layer
+- Cover `context-mcp` optimize mode or `context-usage` with any verification layer
 - Automate the Claude Code invocation step (live scaffold runs are currently manual)
 
 Those are planned follow-on steps.

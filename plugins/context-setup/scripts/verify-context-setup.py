@@ -327,6 +327,178 @@ def verify_memory_trust(failures: list[str]) -> None:
     assert_true(not (fixture / "context" / "session-memory.md").exists(), "memory-trust-app should not include the stale session-memory file reference", failures)
 
 
+def verify_mcp_heavy(failures: list[str]) -> None:
+    """Verify mcp-heavy-app fixture contains expected context-budget and mcp-inventory signals."""
+    fixture = FIXTURES_DIR / "mcp-heavy-app"
+    pkg = load_json(fixture / "package.json")
+    agents = read_text(fixture / "AGENTS.md")
+    mcp = load_json(fixture / ".mcp.json")
+    vscode_mcp = load_json(fixture / ".vscode" / "mcp.json")
+    settings = load_json(fixture / ".claude" / "settings.json")
+
+    # Fixture structure
+    assert_true((fixture / "AGENTS.md").is_file(), "mcp-heavy-app should include AGENTS.md", failures)
+    assert_true((fixture / "CLAUDE.md").is_file(), "mcp-heavy-app should include CLAUDE.md", failures)
+    assert_true((fixture / ".mcp.json").is_file(), "mcp-heavy-app should include .mcp.json", failures)
+    assert_true((fixture / ".vscode" / "mcp.json").is_file(), "mcp-heavy-app should include .vscode/mcp.json", failures)
+    assert_true((fixture / ".claude" / "settings.json").is_file(), "mcp-heavy-app should include .claude/settings.json", failures)
+    assert_true((fixture / "memory" / "MEMORY.md").is_file(), "mcp-heavy-app should include memory/MEMORY.md", failures)
+    assert_true((fixture / "context" / "deployment-notes.md").is_file(), "mcp-heavy-app should include context/ directory", failures)
+
+    # MCP server signals -- project level
+    project_servers = set(mcp.get("servers", {}).keys())
+    assert_true(project_servers == {"atlassian", "github", "supabase", "sentry"},
+                "mcp-heavy-app .mcp.json should configure atlassian, github, supabase, sentry", failures)
+
+    # MCP server signals -- editor level
+    editor_servers = set(vscode_mcp.get("servers", {}).keys())
+    assert_true(editor_servers == {"github", "vercel"},
+                "mcp-heavy-app .vscode/mcp.json should configure github, vercel", failures)
+
+    # Cross-platform overlap
+    overlap = project_servers & editor_servers
+    assert_true(overlap == {"github"},
+                "mcp-heavy-app should have github as the only cross-platform overlap", failures)
+
+    # Unique server count
+    all_servers = project_servers | editor_servers
+    assert_true(len(all_servers) == 5,
+                "mcp-heavy-app should have 5 unique servers across all configs", failures)
+
+    # Hook signals
+    hooks = settings.get("hooks", {}).get("preToolUse", [])
+    assert_true(len(hooks) == 2, "mcp-heavy-app should have 2 hook definitions", failures)
+    matchers = [h.get("matcher", "") for h in hooks]
+    assert_true("Write|Edit" in matchers, "mcp-heavy-app should have Write|Edit hook matcher", failures)
+    assert_true("Bash" in matchers, "mcp-heavy-app should have Bash hook matcher", failures)
+
+    # AGENTS.md content signals for budget
+    assert_true("## MCP Tool Notes" in agents, "mcp-heavy-app AGENTS.md should include MCP Tool Notes section", failures)
+    assert_true("## Trust Boundary Notes" in agents, "mcp-heavy-app AGENTS.md should include Trust Boundary Notes section", failures)
+
+    # Memory signals
+    memory = read_text(fixture / "memory" / "MEMORY.md")
+    assert_true("user_role.md" in memory, "mcp-heavy-app MEMORY.md should reference memory files", failures)
+
+
+def verify_budget_golden(fixture_name: str, failures: list[str]) -> None:
+    """Verify context-budget expected-results are consistent with fixture."""
+    fixture_dir = FIXTURES_DIR / fixture_name
+    budget_path = EXPECTED_DIR / fixture_name / "budget" / "budget.json"
+
+    assert_true(budget_path.is_file(), f"missing budget baseline for {fixture_name}", failures)
+    if not budget_path.is_file():
+        return
+
+    budget = load_json(budget_path)
+    assert_true(budget.get("fixture") == fixture_name, f"{fixture_name} budget fixture mismatch", failures)
+    assert_true(budget.get("skill") == "context-budget", f"{fixture_name} budget should target context-budget", failures)
+    assert_true(budget.get("status") == "golden_baseline", f"{fixture_name} budget should be marked golden_baseline", failures)
+
+    # Verify required_components
+    components = budget.get("required_components", [])
+    assert_true("CLAUDE.md chain" in components, f"{fixture_name} budget should require CLAUDE.md chain component", failures)
+    assert_true("MCP tool descriptions" in components, f"{fixture_name} budget should require MCP tool descriptions component", failures)
+
+    # Cross-check MCP server count against fixture
+    expected_mcp = budget.get("expected_mcp_servers", {})
+    if fixture_name == "memory-trust-app":
+        mcp = load_json(fixture_dir / ".mcp.json")
+        fixture_server_count = len(mcp.get("servers", {}))
+        assert_true(expected_mcp.get("count") == fixture_server_count,
+                    f"{fixture_name} budget MCP count should match fixture ({fixture_server_count})", failures)
+        assert_true(sorted(expected_mcp.get("names", [])) == sorted(mcp.get("servers", {}).keys()),
+                    f"{fixture_name} budget MCP names should match fixture server names", failures)
+    elif fixture_name == "mcp-heavy-app":
+        mcp = load_json(fixture_dir / ".mcp.json")
+        vscode_mcp = load_json(fixture_dir / ".vscode" / "mcp.json")
+        project_count = len(mcp.get("servers", {}))
+        editor_count = len(vscode_mcp.get("servers", {}))
+        unique_count = len(set(mcp.get("servers", {}).keys()) | set(vscode_mcp.get("servers", {}).keys()))
+        assert_true(expected_mcp.get("count_project") == project_count,
+                    f"{fixture_name} budget project MCP count should match fixture ({project_count})", failures)
+        assert_true(expected_mcp.get("count_editor") == editor_count,
+                    f"{fixture_name} budget editor MCP count should match fixture ({editor_count})", failures)
+        assert_true(expected_mcp.get("count_unique") == unique_count,
+                    f"{fixture_name} budget unique MCP count should match fixture ({unique_count})", failures)
+
+    # Cross-check hooks against fixture
+    expected_hooks = budget.get("expected_hooks", {})
+    settings_path = fixture_dir / ".claude" / "settings.json"
+    if settings_path.is_file():
+        settings = load_json(settings_path)
+        hook_count = len(settings.get("hooks", {}).get("preToolUse", []))
+        assert_true(expected_hooks.get("count") == hook_count,
+                    f"{fixture_name} budget hook count should match fixture ({hook_count})", failures)
+
+    # Cross-check context files against fixture
+    expected_files = budget.get("expected_context_files", {})
+    if expected_files.get("agents_md"):
+        assert_true((fixture_dir / "AGENTS.md").is_file(),
+                    f"{fixture_name} budget expects AGENTS.md but fixture lacks it", failures)
+    if expected_files.get("memory_md"):
+        has_memory = (fixture_dir / "MEMORY.md").is_file() or (fixture_dir / "memory" / "MEMORY.md").is_file()
+        assert_true(has_memory,
+                    f"{fixture_name} budget expects MEMORY.md but fixture lacks it", failures)
+
+
+def verify_mcp_inventory_golden(fixture_name: str, failures: list[str]) -> None:
+    """Verify context-mcp inventory expected-results are consistent with fixture."""
+    fixture_dir = FIXTURES_DIR / fixture_name
+    inventory_path = EXPECTED_DIR / fixture_name / "mcp-inventory" / "inventory.json"
+
+    assert_true(inventory_path.is_file(), f"missing mcp-inventory baseline for {fixture_name}", failures)
+    if not inventory_path.is_file():
+        return
+
+    inventory = load_json(inventory_path)
+    assert_true(inventory.get("fixture") == fixture_name, f"{fixture_name} mcp-inventory fixture mismatch", failures)
+    assert_true(inventory.get("skill") == "context-mcp", f"{fixture_name} mcp-inventory should target context-mcp", failures)
+    assert_true(inventory.get("mode") == "inventory", f"{fixture_name} mcp-inventory should be mode inventory", failures)
+    assert_true(inventory.get("status") == "golden_baseline", f"{fixture_name} mcp-inventory should be marked golden_baseline", failures)
+
+    # Cross-check expected sources against actual config files
+    expected_sources = inventory.get("expected_sources", [])
+    for source in expected_sources:
+        config_file = source.get("config_file", "")
+        config_path = fixture_dir / config_file
+        assert_true(config_path.is_file(),
+                    f"{fixture_name} mcp-inventory references {config_file} but fixture lacks it", failures)
+        if config_path.is_file():
+            config = load_json(config_path)
+            actual_servers = sorted(config.get("servers", {}).keys())
+            expected_servers = sorted(source.get("servers", []))
+            assert_true(actual_servers == expected_servers,
+                        f"{fixture_name} mcp-inventory {config_file} servers mismatch: expected {expected_servers}, got {actual_servers}", failures)
+
+    # Cross-check unique server count
+    all_actual_servers = set()
+    for source in expected_sources:
+        config_file = source.get("config_file", "")
+        config_path = fixture_dir / config_file
+        if config_path.is_file():
+            config = load_json(config_path)
+            all_actual_servers.update(config.get("servers", {}).keys())
+
+    expected_unique = sorted(inventory.get("expected_unique_servers", []))
+    assert_true(sorted(all_actual_servers) == expected_unique,
+                f"{fixture_name} mcp-inventory unique servers mismatch: expected {expected_unique}, got {sorted(all_actual_servers)}", failures)
+
+    # Cross-check overlaps
+    overlaps = inventory.get("cross_platform_overlaps", [])
+    if overlaps:
+        # Verify overlapping servers actually appear in multiple configs
+        for overlap in overlaps:
+            server = overlap.get("server", "")
+            sources = overlap.get("sources", [])
+            actual_sources = []
+            for source in expected_sources:
+                if server in source.get("servers", []):
+                    actual_sources.append(source.get("config_file", ""))
+            assert_true(sorted(actual_sources) == sorted(sources),
+                        f"{fixture_name} mcp-inventory overlap for {server} mismatch: expected {sources}, got {actual_sources}", failures)
+
+
 def verify_expected_schema(failures: list[str]) -> None:
     required = [
         EXPECTED_DIR / "stale-context-app" / "audit" / "summary.json",
@@ -336,6 +508,10 @@ def verify_expected_schema(failures: list[str]) -> None:
         EXPECTED_DIR / "memory-trust-app" / "audit" / "findings.json",
         EXPECTED_DIR / "memory-trust-app" / "align" / "findings.json",
         EXPECTED_DIR / "memory-trust-app" / "upgrade" / "plan.json",
+        EXPECTED_DIR / "memory-trust-app" / "budget" / "budget.json",
+        EXPECTED_DIR / "memory-trust-app" / "mcp-inventory" / "inventory.json",
+        EXPECTED_DIR / "mcp-heavy-app" / "budget" / "budget.json",
+        EXPECTED_DIR / "mcp-heavy-app" / "mcp-inventory" / "inventory.json",
     ]
     for path in required:
         assert_true(path.is_file(), f"missing expected-results file: {path.relative_to(ROOT)}", failures)
@@ -348,7 +524,7 @@ def verify_expected_schema(failures: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify context-setup fixtures, baselines, and golden outputs.")
-    parser.add_argument("--fixture", choices=["minimal-node-app", "fullstack-app", "stale-context-app", "memory-trust-app", "all"], default="all")
+    parser.add_argument("--fixture", choices=["minimal-node-app", "fullstack-app", "stale-context-app", "memory-trust-app", "mcp-heavy-app", "all"], default="all")
     parser.add_argument("--mode", choices=["contract", "golden", "all"], default="all")
     args = parser.parse_args()
 
@@ -364,6 +540,8 @@ def main() -> int:
             verify_stale(failures)
         if args.fixture in ("memory-trust-app", "all"):
             verify_memory_trust(failures)
+        if args.fixture in ("mcp-heavy-app", "all"):
+            verify_mcp_heavy(failures)
 
     if args.mode in ("golden", "all"):
         if args.fixture in ("minimal-node-app", "all"):
@@ -378,6 +556,11 @@ def main() -> int:
         if args.fixture in ("memory-trust-app", "all"):
             verify_memory_trust_golden(failures)
             verify_upgrade_golden(failures)
+            verify_budget_golden("memory-trust-app", failures)
+            verify_mcp_inventory_golden("memory-trust-app", failures)
+        if args.fixture in ("mcp-heavy-app", "all"):
+            verify_budget_golden("mcp-heavy-app", failures)
+            verify_mcp_inventory_golden("mcp-heavy-app", failures)
 
     if failures:
         print("context-setup verification failed:")
@@ -387,11 +570,11 @@ def main() -> int:
 
     print("context-setup verification passed")
     if args.fixture == "all":
-        print("- verified fixtures: minimal-node-app, fullstack-app, stale-context-app, memory-trust-app")
+        print("- verified fixtures: minimal-node-app, fullstack-app, stale-context-app, memory-trust-app, mcp-heavy-app")
         if args.mode in ("contract", "all"):
-            print("- verified contract baselines: scaffold, audit, align")
+            print("- verified contract baselines: scaffold, audit, align, budget, mcp-inventory")
         if args.mode in ("golden", "all"):
-            print("- verified golden baselines: scaffold(minimal-node-app, fullstack-app, memory-trust-app), audit(stale-context-app, memory-trust-app), align(stale-context-app, memory-trust-app), upgrade(memory-trust-app)")
+            print("- verified golden baselines: scaffold(minimal-node-app, fullstack-app, memory-trust-app), audit(stale-context-app, memory-trust-app), align(stale-context-app, memory-trust-app), upgrade(memory-trust-app), budget(memory-trust-app, mcp-heavy-app), mcp-inventory(memory-trust-app, mcp-heavy-app)")
     return 0
 
 

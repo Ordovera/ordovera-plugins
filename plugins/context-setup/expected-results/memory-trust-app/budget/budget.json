@@ -1,0 +1,25 @@
+{
+  "fixture": "memory-trust-app",
+  "skill": "context-budget",
+  "status": "golden_baseline",
+  "required_components": [
+    "CLAUDE.md chain",
+    "MCP tool descriptions",
+    "Auto-memory index"
+  ],
+  "expected_context_files": {
+    "agents_md": true,
+    "claude_md": true,
+    "memory_md": true
+  },
+  "expected_mcp_servers": {
+    "count": 2,
+    "names": ["github", "sentry"]
+  },
+  "expected_hooks": {
+    "count": 1,
+    "matchers": ["Write|Edit"]
+  },
+  "expected_diagnosis": "healthy",
+  "diagnosis_notes": "memory-trust-app has a small CLAUDE.md chain, 2 MCP servers, and 1 hook. Context budget should report healthy with no warnings."
+}

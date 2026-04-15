@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "preToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/preflight.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/validate-bash.py"
+          }
+        ]
+      }
+    ]
+  }
+}

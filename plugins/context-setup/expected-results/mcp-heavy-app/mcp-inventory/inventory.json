@@ -1,0 +1,30 @@
+{
+  "fixture": "mcp-heavy-app",
+  "skill": "context-mcp",
+  "mode": "inventory",
+  "status": "golden_baseline",
+  "expected_sources": [
+    {
+      "config_file": ".mcp.json",
+      "platform": "Claude Code",
+      "scope": "project",
+      "servers": ["atlassian", "github", "supabase", "sentry"]
+    },
+    {
+      "config_file": ".vscode/mcp.json",
+      "platform": "VS Code",
+      "scope": "project",
+      "servers": ["github", "vercel"]
+    }
+  ],
+  "expected_server_count_raw": 6,
+  "expected_unique_servers": ["atlassian", "github", "sentry", "supabase", "vercel"],
+  "expected_unique_count": 5,
+  "cross_platform_overlaps": [
+    {
+      "server": "github",
+      "sources": [".mcp.json", ".vscode/mcp.json"]
+    }
+  ],
+  "notes": "mcp-heavy-app has 6 server entries across 2 config files, but github appears in both, yielding 5 unique servers. Inventory should flag the overlap."
+}
