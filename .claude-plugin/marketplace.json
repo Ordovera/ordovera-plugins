@@ -20,6 +20,13 @@
       "source": "./plugins/top10-scan",
       "category": "security",
       "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/plugins/top10-scan"
+    },
+    {
+      "name": "mcp-audit",
+      "description": "MCP server governance analysis. Discovers servers from curated lists and GitHub, extracts tool inventories, classifies read/write sensitivity, and detects auth, logging, and confirmation gate patterns.",
+      "source": "./plugins/mcp-audit",
+      "category": "security",
+      "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/plugins/mcp-audit"
     }
   ]
 }

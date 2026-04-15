@@ -1,0 +1,8 @@
+{
+  "name": "mcp-audit",
+  "description": "MCP server governance analysis -- tool inventory, sensitivity classification, and auth/logging/gate pattern detection",
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  }
+}
