@@ -1,0 +1,73 @@
+{
+  "fixture": "vulnerable-fastapi",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Admin routes have no authentication dependency",
+      "file": "app/main.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "User endpoint lacks ownership verification",
+      "file": "app/routes/users.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "CORS allows all origins with credentials",
+      "file": "app/main.py",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "Debug mode enabled",
+      "file": "app/main.py",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via f-string interpolation in user lookup",
+      "file": "app/routes/users.py",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via f-string in user update",
+      "file": "app/routes/users.py",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via f-string in admin delete",
+      "file": "app/routes/admin.py",
+      "source": "sast"
+    },
+    {
+      "category": "A07",
+      "description": "MD5 used for password hashing",
+      "file": "app/auth.py",
+      "source": "sast"
+    },
+    {
+      "category": "A07",
+      "description": "JWT with hardcoded weak secret and no expiration",
+      "file": "app/auth.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Database error details leaked to client",
+      "file": "app/routes/users.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Bare except blocks swallow errors",
+      "file": "app/routes/users.py",
+      "source": "sast"
+    }
+  ],
+  "minimum_finding_count": 8,
+  "required_categories": ["A01", "A02", "A05", "A07", "A10"]
+}

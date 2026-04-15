@@ -1,0 +1,55 @@
+{
+  "fixture": "vulnerable-nextjs",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Unauthenticated user API endpoint",
+      "file": "app/api/users/route.ts",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "IDOR - user lookup by ID without ownership check",
+      "file": "app/api/users/route.ts",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "Unauthenticated admin endpoint",
+      "file": "app/api/admin/route.ts",
+      "source": "design_review"
+    },
+    {
+      "category": "A03",
+      "description": "Outdated lodash with known prototype pollution CVE",
+      "file": "package.json",
+      "source": "sca"
+    },
+    {
+      "category": "A05",
+      "description": "SQL string concatenation",
+      "file": "app/api/users/route.ts",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "Unsanitized HTML rendering",
+      "file": "app/api/admin/route.ts",
+      "source": "sast"
+    },
+    {
+      "category": "A07",
+      "description": "Weak JWT configuration",
+      "file": "lib/auth.ts",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Fail-open error handling with leaked details",
+      "file": "app/api/users/route.ts",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 6,
+  "required_categories": ["A01", "A05", "A07", "A10"]
+}

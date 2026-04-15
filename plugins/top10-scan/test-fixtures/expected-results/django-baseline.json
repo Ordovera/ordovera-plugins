@@ -1,0 +1,55 @@
+{
+  "fixture": "vulnerable-django",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Profile view missing login_required decorator",
+      "file": "myapp/views.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "User list view missing login_required decorator",
+      "file": "myapp/views.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "DEBUG=True in production configuration",
+      "file": "myapp/settings.py",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "ALLOWED_HOSTS accepts all origins",
+      "file": "myapp/settings.py",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "SECRET_KEY hardcoded in source code",
+      "file": "myapp/settings.py",
+      "source": "sast"
+    },
+    {
+      "category": "A06",
+      "description": "No rate limiting on login endpoint",
+      "file": "myapp/views.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A07",
+      "description": "Default admin credentials accepted",
+      "file": "myapp/views.py",
+      "source": "design_review"
+    },
+    {
+      "category": "A09",
+      "description": "No logging of failed authentication attempts",
+      "file": "myapp/views.py",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 5,
+  "required_categories": ["A01", "A02", "A06", "A07", "A09"]
+}

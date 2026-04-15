@@ -1,0 +1,79 @@
+{
+  "fixture": "vulnerable-rust",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Admin endpoints have no authentication middleware",
+      "file": "src/main.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "User lookup by ID without ownership verification",
+      "file": "src/handlers.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A04",
+      "description": "Hardcoded JWT secret with weak key",
+      "file": "src/auth.rs",
+      "source": "sast"
+    },
+    {
+      "category": "A04",
+      "description": "JWT tokens have no expiration",
+      "file": "src/auth.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via format!() string interpolation in login",
+      "file": "src/handlers.rs",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via format!() in user lookup",
+      "file": "src/handlers.rs",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via format!() in user update",
+      "file": "src/handlers.rs",
+      "source": "sast"
+    },
+    {
+      "category": "A06",
+      "description": "No rate limiting on login endpoint",
+      "file": "src/handlers.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A06",
+      "description": "Predictable password reset token based on timestamp",
+      "file": "src/handlers.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "unwrap() on user input parsing causes panics",
+      "file": "src/handlers.rs",
+      "source": "sast"
+    },
+    {
+      "category": "A10",
+      "description": "Database error details leaked to client",
+      "file": "src/handlers.rs",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Reset token leaked in API response",
+      "file": "src/handlers.rs",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 8,
+  "required_categories": ["A01", "A04", "A05", "A06", "A10"]
+}

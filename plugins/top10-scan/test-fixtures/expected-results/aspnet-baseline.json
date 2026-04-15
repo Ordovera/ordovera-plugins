@@ -1,0 +1,79 @@
+{
+  "fixture": "vulnerable-aspnet",
+  "expected_findings": [
+    {
+      "category": "A01",
+      "description": "Admin controller missing [Authorize] attribute",
+      "file": "Controllers/AdminController.cs",
+      "source": "design_review"
+    },
+    {
+      "category": "A01",
+      "description": "User endpoint lacks ownership verification",
+      "file": "Controllers/UsersController.cs",
+      "source": "design_review"
+    },
+    {
+      "category": "A02",
+      "description": "Developer exception page enabled unconditionally",
+      "file": "Program.cs",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "CORS allows all origins",
+      "file": "Program.cs",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "Hardcoded database credentials in config",
+      "file": "appsettings.json",
+      "source": "sast"
+    },
+    {
+      "category": "A02",
+      "description": "Missing HTTPS redirection and HSTS",
+      "file": "Program.cs",
+      "source": "design_review"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via string interpolation in FromSqlRaw",
+      "file": "Controllers/UsersController.cs",
+      "source": "sast"
+    },
+    {
+      "category": "A05",
+      "description": "SQL injection via string interpolation in ExecuteSqlRawAsync",
+      "file": "Controllers/UsersController.cs",
+      "source": "sast"
+    },
+    {
+      "category": "A08",
+      "description": "Webhook endpoint accepts payloads without signature verification",
+      "file": "Controllers/WebhookController.cs",
+      "source": "design_review"
+    },
+    {
+      "category": "A08",
+      "description": "No schema validation on webhook payload",
+      "file": "Controllers/WebhookController.cs",
+      "source": "design_review"
+    },
+    {
+      "category": "A10",
+      "description": "Raw exception messages and stack traces returned to client",
+      "file": "Controllers/UsersController.cs",
+      "source": "sast"
+    },
+    {
+      "category": "A10",
+      "description": "No timeout on external HttpClient calls",
+      "file": "Controllers/UsersController.cs",
+      "source": "design_review"
+    }
+  ],
+  "minimum_finding_count": 8,
+  "required_categories": ["A01", "A02", "A05", "A08", "A10"]
+}
