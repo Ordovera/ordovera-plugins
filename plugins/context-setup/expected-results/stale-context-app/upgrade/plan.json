@@ -1,0 +1,20 @@
+{
+  "fixture": "stale-context-app",
+  "skill": "context-upgrade",
+  "status": "golden_baseline",
+  "current_level": "full_single_file",
+  "recommended_upgrade": "cascading_with_context_directory",
+  "required_actions": [
+    "Fix stale framework version references before upgrading",
+    "Resolve contradictions between root and subdirectory AGENTS.md",
+    "Convert CLAUDE.md from regular file to symlink",
+    "Move architecture-decisions.md content into a cleaner context/ structure"
+  ],
+  "required_signals": [
+    "Stale React version in AGENTS.md vs package.json",
+    "Subdirectory AGENTS.md contradicts root test runner",
+    "CLAUDE.md is a regular file, not a symlink",
+    "Existing context/ directory with architecture decisions"
+  ],
+  "notes": "stale-context-app should upgrade from full_single_file to cascading. Unlike memory-trust-app, the primary concern here is stale references that must be resolved BEFORE the upgrade, not trust-boundary surfaces."
+}

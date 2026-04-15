@@ -499,6 +499,134 @@ def verify_mcp_inventory_golden(fixture_name: str, failures: list[str]) -> None:
                         f"{fixture_name} mcp-inventory overlap for {server} mismatch: expected {sources}, got {actual_sources}", failures)
 
 
+def verify_stale_upgrade_golden(failures: list[str]) -> None:
+    """Verify stale-context-app upgrade expected-results are consistent with fixture."""
+    fixture_dir = FIXTURES_DIR / "stale-context-app"
+    plan_path = EXPECTED_DIR / "stale-context-app" / "upgrade" / "plan.json"
+
+    assert_true(plan_path.is_file(), "missing upgrade plan baseline for stale-context-app", failures)
+    if not plan_path.is_file():
+        return
+
+    plan = load_json(plan_path)
+    agents = read_text(fixture_dir / "AGENTS.md")
+    claude = read_text(fixture_dir / "CLAUDE.md")
+    pkg = load_json(fixture_dir / "package.json")
+    sub_agents = read_text(fixture_dir / "src" / "api" / "AGENTS.md")
+
+    assert_true(plan.get("fixture") == "stale-context-app", "stale-context-app upgrade plan fixture mismatch", failures)
+    assert_true(plan.get("skill") == "context-upgrade", "stale-context-app upgrade plan should target context-upgrade", failures)
+    assert_true(plan.get("status") == "golden_baseline", "stale-context-app upgrade plan should be marked golden_baseline", failures)
+    assert_true(plan.get("current_level") == "full_single_file", "stale-context-app upgrade baseline should start from full_single_file", failures)
+    assert_true(plan.get("recommended_upgrade") == "cascading_with_context_directory", "stale-context-app upgrade baseline should recommend cascading", failures)
+
+    required_actions = plan.get("required_actions", [])
+    assert_true(any("stale" in item.lower() or "version" in item.lower() for item in required_actions), "stale-context-app upgrade baseline should include stale reference cleanup action", failures)
+    assert_true(any("contradiction" in item.lower() for item in required_actions), "stale-context-app upgrade baseline should include contradiction resolution action", failures)
+    assert_true(any("CLAUDE.md" in item or "symlink" in item.lower() for item in required_actions), "stale-context-app upgrade baseline should include CLAUDE.md symlink action", failures)
+
+    required_signals = plan.get("required_signals", [])
+    assert_true(any("React" in item for item in required_signals), "stale-context-app upgrade baseline should include React version drift signal", failures)
+    assert_true(any("contradict" in item.lower() or "test runner" in item.lower() for item in required_signals), "stale-context-app upgrade baseline should include contradiction signal", failures)
+    assert_true(any("CLAUDE.md" in item or "symlink" in item.lower() for item in required_signals), "stale-context-app upgrade baseline should include CLAUDE.md signal", failures)
+
+    # Cross-check fixture still has the signals
+    assert_true("React 18" in agents, "stale-context-app AGENTS.md should still carry stale React 18 for upgrade coverage", failures)
+    assert_true(pkg["dependencies"]["react"].startswith("^19"), "stale-context-app should still depend on React 19 for upgrade coverage", failures)
+    assert_true("Jest" in sub_agents, "stale-context-app subdirectory AGENTS should still contradict for upgrade coverage", failures)
+    assert_true("See `AGENTS.md`." in claude, "stale-context-app CLAUDE.md should still be a regular file for upgrade coverage", failures)
+    assert_true((fixture_dir / "context" / "architecture-decisions.md").is_file(), "stale-context-app should still have context/ directory for upgrade coverage", failures)
+
+
+def verify_mcp_templates_contract(failures: list[str]) -> None:
+    """Verify mcp-templates.json internal consistency."""
+    templates_path = ROOT / "data" / "mcp-templates.json"
+    assert_true(templates_path.is_file(), "mcp-templates.json not found", failures)
+    if not templates_path.is_file():
+        return
+
+    data = load_json(templates_path)
+
+    # Schema version
+    assert_true(data.get("schema_version") == "1.0", "mcp-templates.json should have schema_version 1.0", failures)
+
+    templates = data.get("templates", {})
+    assert_true(len(templates) >= 7, f"mcp-templates.json should have at least 7 server templates, found {len(templates)}", failures)
+
+    expected_servers = {"atlassian", "gmail", "google_calendar", "web", "github", "supabase", "vercel"}
+    actual_servers = set(templates.keys())
+    assert_true(expected_servers <= actual_servers, f"mcp-templates.json missing servers: {expected_servers - actual_servers}", failures)
+
+    for name, template in templates.items():
+        # Each template must have match_patterns, tools, and last_verified
+        assert_true("match_patterns" in template, f"mcp-templates.json: {name} missing match_patterns", failures)
+        assert_true("tools" in template, f"mcp-templates.json: {name} missing tools", failures)
+        assert_true("last_verified" in template, f"mcp-templates.json: {name} missing last_verified", failures)
+
+        # match_patterns must be a non-empty list
+        patterns = template.get("match_patterns", [])
+        assert_true(isinstance(patterns, list) and len(patterns) > 0, f"mcp-templates.json: {name} match_patterns should be non-empty list", failures)
+
+        # tools must be a non-empty dict
+        tools = template.get("tools", {})
+        assert_true(isinstance(tools, dict) and len(tools) > 0, f"mcp-templates.json: {name} tools should be non-empty dict", failures)
+
+        # Each tool must have an optimization field
+        for tool_name, tool_data in tools.items():
+            assert_true("optimization" in tool_data, f"mcp-templates.json: {name}/{tool_name} missing optimization", failures)
+
+        # last_verified must be a date string
+        lv = template.get("last_verified", "")
+        assert_true(len(lv) == 10 and lv[4] == "-" and lv[7] == "-", f"mcp-templates.json: {name} last_verified should be YYYY-MM-DD format", failures)
+
+
+def verify_data_files_contract(failures: list[str]) -> None:
+    """Verify all data files are structurally sound and cross-reference correctly."""
+    data_dir = ROOT / "data"
+
+    required_files = [
+        "detection-markers.json",
+        "complexity-levels.json",
+        "audit-categories.json",
+        "mcp-templates.json",
+    ]
+    for f in required_files:
+        assert_true((data_dir / f).is_file(), f"missing data file: {f}", failures)
+
+    # detection-markers.json
+    markers = load_json(data_dir / "detection-markers.json")
+    assert_true(markers.get("schema_version") == "1.0", "detection-markers.json should have schema_version 1.0", failures)
+    assert_true("package_managers" in markers, "detection-markers.json should have package_managers", failures)
+    assert_true("frameworks" in markers, "detection-markers.json should have frameworks", failures)
+    assert_true("config_signals" in markers, "detection-markers.json should have config_signals", failures)
+    # Must include MCP config detection paths
+    assert_true("mcp_configs" in markers, "detection-markers.json should have mcp_configs", failures)
+
+    # complexity-levels.json
+    levels = load_json(data_dir / "complexity-levels.json")
+    assert_true(levels.get("schema_version") == "1.0", "complexity-levels.json should have schema_version 1.0", failures)
+    level_data = levels.get("levels", {})
+    assert_true("minimal" in level_data, "complexity-levels.json should define minimal level", failures)
+    assert_true("full_single_file" in level_data, "complexity-levels.json should define full_single_file level", failures)
+    assert_true("cascading" in level_data, "complexity-levels.json should define cascading level", failures)
+
+    # Each level must have trigger_signals
+    for level_name, level in level_data.items():
+        assert_true("trigger_signals" in level, f"complexity-levels.json: {level_name} missing trigger_signals", failures)
+
+    # Cross-reference: complexity-levels required_sections should align with audit-categories checks
+    audit = load_json(data_dir / "audit-categories.json")
+    assert_true(audit.get("schema_version") == "1.0", "audit-categories.json should have schema_version 1.0", failures)
+    categories = audit.get("categories", [])
+    assert_true(len(categories) >= 7, f"audit-categories.json should have at least 7 categories, found {len(categories)}", failures)
+
+    # Verify known category names exist
+    cat_names = [c.get("name") for c in categories]
+    for expected in ["Level Appropriateness", "Section Completeness", "Format and Conventions",
+                     "Structural Issues", "Trust Boundary Coverage", "Command Output Optimization"]:
+        assert_true(expected in cat_names, f"audit-categories.json missing category: {expected}", failures)
+
+
 def verify_expected_schema(failures: list[str]) -> None:
     required = [
         EXPECTED_DIR / "stale-context-app" / "audit" / "summary.json",
@@ -508,6 +636,7 @@ def verify_expected_schema(failures: list[str]) -> None:
         EXPECTED_DIR / "memory-trust-app" / "audit" / "findings.json",
         EXPECTED_DIR / "memory-trust-app" / "align" / "findings.json",
         EXPECTED_DIR / "memory-trust-app" / "upgrade" / "plan.json",
+        EXPECTED_DIR / "stale-context-app" / "upgrade" / "plan.json",
         EXPECTED_DIR / "memory-trust-app" / "budget" / "budget.json",
         EXPECTED_DIR / "memory-trust-app" / "mcp-inventory" / "inventory.json",
         EXPECTED_DIR / "mcp-heavy-app" / "budget" / "budget.json",
@@ -531,6 +660,8 @@ def main() -> int:
     failures: list[str] = []
     if args.mode in ("contract", "all"):
         verify_expected_schema(failures)
+        verify_data_files_contract(failures)
+        verify_mcp_templates_contract(failures)
 
         if args.fixture in ("minimal-node-app", "all"):
             verify_minimal(failures)
@@ -553,6 +684,7 @@ def main() -> int:
         if args.fixture in ("stale-context-app", "all"):
             verify_audit_golden(failures)
             verify_align_golden(failures)
+            verify_stale_upgrade_golden(failures)
         if args.fixture in ("memory-trust-app", "all"):
             verify_memory_trust_golden(failures)
             verify_upgrade_golden(failures)
@@ -572,9 +704,9 @@ def main() -> int:
     if args.fixture == "all":
         print("- verified fixtures: minimal-node-app, fullstack-app, stale-context-app, memory-trust-app, mcp-heavy-app")
         if args.mode in ("contract", "all"):
-            print("- verified contract baselines: scaffold, audit, align, budget, mcp-inventory")
+            print("- verified contract baselines: scaffold, audit, align, budget, mcp-inventory, data-files, mcp-templates")
         if args.mode in ("golden", "all"):
-            print("- verified golden baselines: scaffold(minimal-node-app, fullstack-app, memory-trust-app), audit(stale-context-app, memory-trust-app), align(stale-context-app, memory-trust-app), upgrade(memory-trust-app), budget(memory-trust-app, mcp-heavy-app), mcp-inventory(memory-trust-app, mcp-heavy-app)")
+            print("- verified golden baselines: scaffold(minimal-node-app, fullstack-app, memory-trust-app), audit(stale-context-app, memory-trust-app), align(stale-context-app, memory-trust-app), upgrade(stale-context-app, memory-trust-app), budget(memory-trust-app, mcp-heavy-app), mcp-inventory(memory-trust-app, mcp-heavy-app)")
     return 0
 
 
