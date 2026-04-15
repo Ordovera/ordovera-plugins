@@ -148,6 +148,7 @@ export interface PluginReport {
   integrity: IntegritySummary | null;
   dep_scan: DepScanSummary | null;
   dep_audit: DepAuditSummary | null;
+  skipped: Record<string, string>;
   warnings: string[];
 }
 

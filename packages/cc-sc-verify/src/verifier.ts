@@ -113,6 +113,7 @@ export async function verifyPlugins(
     }
 
     const warnings: string[] = [];
+    const skipped: Record<string, string> = {};
 
     // Check repo status
     const repoStatus = await checkRepoStatus(
@@ -139,6 +140,12 @@ export async function verifyPlugins(
         integrity: null,
         dep_scan: null,
         dep_audit: null,
+        skipped: {
+          permission_escalation: "Repository not accessible",
+          integrity: "Repository not accessible",
+          dep_scan: "Repository not accessible",
+          dep_audit: "Repository not accessible",
+        },
         warnings: [repoStatus.error ?? "Repository not found"],
       });
       continue;
@@ -361,6 +368,29 @@ export async function verifyPlugins(
       }
     }
 
+    // -- Populate skipped reasons for null fields --
+    if (options?.deep === false) {
+      skipped.permission_escalation = "Skipped (--quick mode)";
+      skipped.integrity = "Skipped (--quick mode)";
+    } else {
+      if (!permissionEscalation) {
+        skipped.permission_escalation = "Remote skill content not available (GitHub API may have rate-limited)";
+      }
+      if (!integrity) {
+        skipped.integrity = "Remote file tree not available (GitHub API may have rate-limited)";
+      }
+    }
+    if (!depScan || !depScan.has_bundled_deps) {
+      skipped.dep_scan = "Plugin has no bundled dependencies (stdlib only)";
+    }
+    if (!depAudit) {
+      if (!options?.auditDeps) {
+        skipped.dep_audit = "Not requested (use --audit-deps to enable)";
+      } else if (!depResult.has_bundled_deps) {
+        skipped.dep_audit = "Plugin has no bundled dependencies to audit";
+      }
+    }
+
     reports.push({
       plugin_name: pluginName,
       marketplace: resolved.marketplace,
@@ -379,6 +409,7 @@ export async function verifyPlugins(
       integrity,
       dep_scan: depScan,
       dep_audit: depAudit,
+      skipped,
       warnings,
     });
   }

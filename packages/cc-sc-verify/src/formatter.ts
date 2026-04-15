@@ -85,6 +85,16 @@ function formatPlugin(report: PluginReport): string {
     }
   }
 
+  // Skipped analysis reasons (only show for non-obvious cases)
+  if (report.skipped) {
+    for (const [field, reason] of Object.entries(report.skipped)) {
+      // Don't show "no bundled deps" or "not requested" -- those are expected
+      if (reason.includes("rate-limited") || reason.includes("not available")) {
+        lines.push(`  SKIPPED ${field}: ${reason}`);
+      }
+    }
+  }
+
   // Remaining warnings not already shown
   const shownPrefixes = [
     "New skills", "Skills removed", "New hooks", "Hooks removed",

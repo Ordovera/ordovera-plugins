@@ -1,29 +1,36 @@
 # AGENTS.md
 
-Claude Code plugin monorepo. Two plugins ship from this repo: `context-setup` (context engineering) and `top10-scan` (OWASP security scanning).
+Claude Code plugin monorepo and npx package workspace. Two plugins and two npx packages ship from this repo.
+
+Plugins: `context-setup` (context engineering, 8 skills) and `top10-scan` (OWASP security scanning, 7 skills).
+
+Packages: `cc-session-audit` (Claude Code session forensics) and `cc-sc-verify` (plugin supply chain verification).
 
 ## Tech Stack
 
 - Claude Code plugin system (`.claude-plugin/plugin.json` + `skills/*/SKILL.md`)
-- Python 3 (stdlib only) for all scripts and verification harnesses
+- TypeScript (ES modules) for npx packages under `packages/`
+- Python 3 (stdlib only) for plugin scripts and verification harnesses
 - Bash for shell script wrappers and hooks
 - JSON for structured data, assertions, expected results, and config
-
-No build step. No package manager at the repo root. Each plugin is self-contained.
 
 ## Repo Structure
 
 ```text
 ordovera-plugins/
   .claude-plugin/marketplace.json  -- Plugin registry (lists both plugins)
-  .gitignore                       -- Ignores context/ (private planning docs) and .DS_Store
+  .gitignore                       -- Ignores context/, node_modules, dist
   README.md                        -- Public-facing install instructions
   AGENTS.md                        -- This file
   CLAUDE.md                        -- Symlink to AGENTS.md
+  package.json                     -- Workspace root (npm workspaces for packages/)
   context/                         -- Private planning docs (gitignored, not shipped)
   plugins/
-    context-setup/                 -- Context engineering plugin (6 skills)
+    context-setup/                 -- Context engineering plugin (8 skills)
     top10-scan/                    -- OWASP security scanning plugin (7 skills)
+  packages/
+    cc-session-audit/              -- npx cc-session-audit (session compliance forensics)
+    cc-sc-verify/                  -- npx cc-sc-verify (plugin supply chain verification)
 ```
 
 ## Plugin Structure Pattern
@@ -47,6 +54,23 @@ plugins/<name>/
   LICENSE                     -- MIT
 ```
 
+## Package Structure
+
+npx packages under `packages/` are TypeScript (ES modules), each with their own `package.json`. The root `package.json` uses npm workspaces to link them.
+
+```text
+packages/<name>/
+  package.json        -- npm package metadata, bin entry for npx
+  tsconfig.json       -- TypeScript config
+  src/                -- Source (TypeScript)
+  dist/               -- Build output (gitignored)
+  test-fixtures/      -- Synthetic test data
+  node_modules/       -- Dependencies (gitignored)
+```
+
+Build: `npm run build` (per package) or `npm run build --workspaces` (all).
+Test: `npm test` (per package) or `npm test --workspaces` (all).
+
 ## Commands
 
 Verification (context-setup):
@@ -64,11 +88,12 @@ Verification (top10-scan):
 ## Code Standards
 
 - Python: stdlib only, no external dependencies. argparse for CLIs. JSON to stdout, errors to stderr.
+- TypeScript: ES modules, strict mode, no external runtime dependencies for packages. Dev deps only (vitest, typescript, @types/node).
 - Bash: `set -euo pipefail`. Graceful degradation (exit 0 with error JSON, not exit 1).
 - JSON data files: include `schema_version` for forward compatibility.
 - SKILL.md files: YAML frontmatter (name, description), H1 title, structured sections. Reference data files with `<plugin_dir>/data/` paths.
 - No emojis in any file. No decorative symbols in documentation.
-- 2-space indentation in JSON. Standard indentation in Python/Bash.
+- 2-space indentation in JSON. Standard indentation in Python/Bash/TypeScript.
 
 ## How Plugins Work
 

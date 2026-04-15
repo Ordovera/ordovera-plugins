@@ -1,0 +1,14 @@
+{
+  "name": "ordovera-plugins",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces",
+    "verify:context-setup": "bash plugins/context-setup/scripts/verify-context-setup.sh",
+    "verify:top10-scan": "bash plugins/top10-scan/scripts/verify-top10-scan.sh",
+    "verify": "npm run verify:context-setup && npm run verify:top10-scan && npm test --workspaces"
+  }
+}
