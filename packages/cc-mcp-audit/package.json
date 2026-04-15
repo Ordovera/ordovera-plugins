@@ -1,0 +1,33 @@
+{
+  "name": "cc-mcp-audit",
+  "version": "0.1.0",
+  "description": "Static analysis tool for MCP servers. Extracts tool inventories, classifies read/write sensitivity, and detects auth, logging, and confirmation gate patterns.",
+  "type": "module",
+  "bin": {
+    "cc-mcp-audit": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "governance",
+    "security-audit",
+    "tool-analysis",
+    "ai-governance"
+  ],
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}
