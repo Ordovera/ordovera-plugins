@@ -13,6 +13,7 @@ export {
 } from "./permissions.js";
 export { hashLocalFiles, hashRemoteFiles, compareHashes } from "./integrity.js";
 export { scanPluginDeps } from "./deps.js";
+export { auditDeps, extractNpmDeps, extractPipDeps } from "./osv.js";
 export type {
   VerificationReport,
   PluginReport,
@@ -21,6 +22,7 @@ export type {
   PermissionEscalationSummary,
   IntegritySummary,
   DepScanSummary,
+  DepAuditSummary,
   InstalledPluginsFile,
   KnownMarketplacesFile,
   PluginInstall,

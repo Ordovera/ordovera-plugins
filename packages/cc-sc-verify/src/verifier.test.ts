@@ -165,6 +165,7 @@ describe("report classification", () => {
       permission_escalation: null,
       integrity: null,
       dep_scan: null,
+      dep_audit: null,
       warnings: [],
     };
     expect(hasIssues(report)).toBe(false);
@@ -188,6 +189,7 @@ describe("report classification", () => {
       permission_escalation: null,
       integrity: null,
       dep_scan: null,
+      dep_audit: null,
       warnings: [],
     };
     expect(hasIssues(report)).toBe(true);
@@ -211,6 +213,7 @@ describe("report classification", () => {
       permission_escalation: null,
       integrity: null,
       dep_scan: null,
+      dep_audit: null,
       warnings: ["Repository not found"],
     };
     expect(hasIssues(report)).toBe(true);

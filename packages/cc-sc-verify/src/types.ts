@@ -116,6 +116,20 @@ export interface DepScanSummary {
   dep_warnings: string[];
 }
 
+export interface DepAuditSummary {
+  deps_checked: number;
+  deps_with_vulns: number;
+  deps_deprecated: number;
+  total_vulns: number;
+  findings: Array<{
+    package_name: string;
+    version: string;
+    vuln_count: number;
+    deprecated: boolean;
+    highest_severity: string;
+  }>;
+}
+
 export interface PluginReport {
   plugin_name: string;
   marketplace: string;
@@ -133,6 +147,7 @@ export interface PluginReport {
   permission_escalation: PermissionEscalationSummary | null;
   integrity: IntegritySummary | null;
   dep_scan: DepScanSummary | null;
+  dep_audit: DepAuditSummary | null;
   warnings: string[];
 }
 

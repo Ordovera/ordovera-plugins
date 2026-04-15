@@ -75,6 +75,16 @@ function formatPlugin(report: PluginReport): string {
     lines.push(`  Bundled deps: ${report.dep_scan.manifests.join(", ")}`);
   }
 
+  // Dep audit findings
+  if (report.dep_audit && report.dep_audit.findings.length > 0) {
+    for (const f of report.dep_audit.findings) {
+      const parts: string[] = [`${f.package_name}@${f.version}`];
+      if (f.vuln_count > 0) parts.push(`${f.vuln_count} CVE(s) [${f.highest_severity}]`);
+      if (f.deprecated) parts.push("DEPRECATED");
+      lines.push(`  DEP: ${parts.join(" -- ")}`);
+    }
+  }
+
   // Remaining warnings not already shown
   const shownPrefixes = [
     "New skills", "Skills removed", "New hooks", "Hooks removed",

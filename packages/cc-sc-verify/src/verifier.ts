@@ -23,7 +23,9 @@ import {
   compareHashes,
 } from "./integrity.js";
 import { scanPluginDeps } from "./deps.js";
+import { auditDeps } from "./osv.js";
 import type {
+  DepAuditSummary,
   DepScanSummary,
   DriftStatus,
   HookDiff,
@@ -59,6 +61,8 @@ export interface VerifyOptions {
   plugin?: string;
   /** Run deep analysis (permissions, integrity, deps). Default: true */
   deep?: boolean;
+  /** Audit bundled dependencies against OSV for CVEs and deprecation. Default: false */
+  auditDeps?: boolean;
 }
 
 export async function verifyPlugins(
@@ -134,6 +138,7 @@ export async function verifyPlugins(
         permission_escalation: null,
         integrity: null,
         dep_scan: null,
+        dep_audit: null,
         warnings: [repoStatus.error ?? "Repository not found"],
       });
       continue;
@@ -315,6 +320,47 @@ export async function verifyPlugins(
       };
     }
 
+    // -- Dependency CVE/deprecation audit (opt-in) --
+    let depAudit: DepAuditSummary | null = null;
+    if (options?.auditDeps && depResult.has_bundled_deps) {
+      for (const bundledDep of depResult.bundled_deps) {
+        const auditResult = await auditDeps(install.installPath, bundledDep.package_manager);
+        if (auditResult.total_vulns > 0 || auditResult.deps_deprecated > 0) {
+          const findings = auditResult.results.map((r) => {
+            const severities = r.vulnerabilities.map((v) => v.severity);
+            const severityRank: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, UNKNOWN: 0 };
+            const highest = severities.sort((a, b) => (severityRank[b] ?? 0) - (severityRank[a] ?? 0))[0] ?? "NONE";
+            return {
+              package_name: r.package_name,
+              version: r.version,
+              vuln_count: r.vulnerabilities.length,
+              deprecated: r.deprecated,
+              highest_severity: highest,
+            };
+          });
+
+          depAudit = {
+            deps_checked: auditResult.deps_checked,
+            deps_with_vulns: auditResult.deps_with_vulns,
+            deps_deprecated: auditResult.deps_deprecated,
+            total_vulns: auditResult.total_vulns,
+            findings,
+          };
+
+          if (auditResult.deps_with_vulns > 0) {
+            warnings.push(
+              `${auditResult.deps_with_vulns} bundled dep(s) have known vulnerabilities (${auditResult.total_vulns} total CVEs)`
+            );
+          }
+          if (auditResult.deps_deprecated > 0) {
+            warnings.push(
+              `${auditResult.deps_deprecated} bundled dep(s) are deprecated`
+            );
+          }
+        }
+      }
+    }
+
     reports.push({
       plugin_name: pluginName,
       marketplace: resolved.marketplace,
@@ -332,6 +378,7 @@ export async function verifyPlugins(
       permission_escalation: permissionEscalation,
       integrity,
       dep_scan: depScan,
+      dep_audit: depAudit,
       warnings,
     });
   }

@@ -21,6 +21,7 @@ Options:
   --marketplace <name>   Only check plugins from this marketplace
   --plugin <key>         Only check a specific plugin (e.g., "context-setup@ordovera-plugins")
   --quick                Skip deep analysis (permissions, integrity, deps)
+  --audit-deps           Check bundled dependencies against OSV for CVEs and deprecation
   --json                 Output structured JSON instead of terminal summary
   --help                 Show this help message
 
@@ -61,7 +62,8 @@ async function main(): Promise<void> {
   }
 
   const deep = !args.includes("--quick");
-  const report = await verifyPlugins({ marketplace, plugin, deep });
+  const auditDeps = args.includes("--audit-deps");
+  const report = await verifyPlugins({ marketplace, plugin, deep, auditDeps });
 
   if (jsonOutput) {
     console.log(JSON.stringify(report, null, 2));
