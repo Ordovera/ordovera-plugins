@@ -107,7 +107,7 @@ export function scanPatterns(repoPath: string): PatternResults {
         for (const pattern of def.patterns) {
           const match = line.match(pattern);
           if (match) {
-            const key = def.type === "gate" ? "gates" : def.type;
+            const key: keyof PatternResults = def.type === "gate" ? "gates" : def.type as keyof PatternResults;
             results[key].push({
               type: def.type,
               match: match[0],
@@ -119,12 +119,12 @@ export function scanPatterns(repoPath: string): PatternResults {
         }
       }
 
-      // Actor attribution: check if logging lines also reference a principal
+      // Actor attribution: track all principal identifier occurrences
       for (const pattern of ACTOR_ATTRIBUTION_PATTERNS) {
         const match = line.match(pattern);
         if (match) {
           results.actorAttribution.push({
-            type: "logging",
+            type: "attribution",
             match: match[0],
             file: relPath,
             line: i + 1,
@@ -136,6 +136,41 @@ export function scanPatterns(repoPath: string): PatternResults {
   }
 
   return results;
+}
+
+/**
+ * Determine whether log statements carry principal identifiers.
+ * Stricter than raw actorAttribution count: requires attribution matches
+ * to be on the same line as a logging match, or within 3 lines in the same file.
+ */
+export function hasLogAdjacentAttribution(
+  patterns: PatternResults
+): boolean {
+  if (patterns.logging.length === 0 || patterns.actorAttribution.length === 0) {
+    return false;
+  }
+
+  // Build a lookup: file -> set of logging line numbers
+  const logLinesByFile = new Map<string, number[]>();
+  for (const log of patterns.logging) {
+    const lines = logLinesByFile.get(log.file) ?? [];
+    lines.push(log.line);
+    logLinesByFile.set(log.file, lines);
+  }
+
+  // Check if any attribution match is within 3 lines of a logging match in the same file
+  const proximity = 3;
+  for (const attr of patterns.actorAttribution) {
+    const logLines = logLinesByFile.get(attr.file);
+    if (!logLines) continue;
+    for (const logLine of logLines) {
+      if (Math.abs(attr.line - logLine) <= proximity) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**

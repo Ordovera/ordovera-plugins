@@ -67,7 +67,7 @@ export interface ExtractedTool {
 
 export interface PatternMatch {
   /** Type of pattern detected */
-  type: "auth" | "logging" | "gate";
+  type: "auth" | "logging" | "gate" | "attribution";
   /** The matched text or identifier */
   match: string;
   /** File where the pattern was found */
@@ -86,6 +86,8 @@ export type AccountabilityGapPattern =
 export interface AccountabilityGap {
   /** Named pattern this gap represents */
   pattern: AccountabilityGapPattern;
+  /** Confidence in the detection based on heuristic quality */
+  confidence: "high" | "medium" | "low";
   /** Specific instances where this gap was detected */
   instances: Array<{ tool?: string; file: string; line: number }>;
   /** What the human reviewer needs to verify */
@@ -115,7 +117,10 @@ export interface ServerReport {
     hasAuth: boolean;
     hasPerToolAuth: boolean;
     hasLogging: boolean;
-    hasActorAttribution: boolean;
+    /** Whether any principal identifiers (user_id, session_id, etc.) exist in the codebase */
+    hasAttributionIdentifiers: boolean;
+    /** Whether log statements carry principal identifiers (stricter: log-adjacent) */
+    hasAttributedLogging: boolean;
     hasConfirmationGates: boolean;
     hasWriteTools: boolean;
   };

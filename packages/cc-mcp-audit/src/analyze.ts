@@ -9,6 +9,7 @@ import {
   scanPatterns,
   assessAuthArchitecture,
   detectFrameworkImports,
+  hasLogAdjacentAttribution,
 } from "./patterns.js";
 import { buildServerReport, buildAuditReport } from "./report.js";
 import { detectGaps } from "./gaps.js";
@@ -100,7 +101,8 @@ export function analyzeServer(input: McpServerInput): ServerReport {
   );
 
   report.flags.hasPerToolAuth = authArch === "per-tool";
-  report.flags.hasActorAttribution = patterns.actorAttribution.length > 0;
+  report.flags.hasAttributionIdentifiers = patterns.actorAttribution.length > 0;
+  report.flags.hasAttributedLogging = hasLogAdjacentAttribution(patterns);
 
   if (authArch === "unclear") {
     report.warnings.push(

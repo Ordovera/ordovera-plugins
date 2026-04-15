@@ -57,12 +57,13 @@ describe("analyzeServer", () => {
     expect(report.warnings.some((w) => w.includes("manual review required"))).toBe(true);
   });
 
-  it("detects actor attribution", () => {
+  it("detects attributed logging (log-adjacent)", () => {
     const report = analyzeServer({
       source: resolve(fixturesDir, "python-server"),
     });
 
-    expect(report.flags.hasActorAttribution).toBe(true);
+    expect(report.flags.hasAttributionIdentifiers).toBe(true);
+    expect(report.flags.hasAttributedLogging).toBe(true);
   });
 
   it("populates accountability gaps", () => {

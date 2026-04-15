@@ -1,6 +1,6 @@
 export { analyzeServer, analyzeServers } from "./analyze.js";
 export { extractTools } from "./extract.js";
-export { scanPatterns, assessAuthArchitecture, detectFrameworkImports } from "./patterns.js";
+export { scanPatterns, assessAuthArchitecture, detectFrameworkImports, hasLogAdjacentAttribution } from "./patterns.js";
 export { refineClassifications } from "./classify.js";
 export { resolveSource } from "./clone.js";
 export { buildServerReport, buildAuditReport, formatMarkdown } from "./report.js";
