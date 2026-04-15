@@ -1,6 +1,6 @@
 {
   "name": "mcp-audit",
-  "description": "MCP server governance analysis -- tool inventory, sensitivity classification, and auth/logging/gate pattern detection",
+  "description": "MCP server governance posture analysis -- accountability gaps, auth architecture, logging attribution, and confirmation gates. Does not assess code-level vulnerabilities.",
   "author": {
     "name": "Brian Fending",
     "email": "brian@ordovera.com"
