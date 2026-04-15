@@ -76,6 +76,22 @@ export interface PatternMatch {
   line: number;
 }
 
+export type AccountabilityGapPattern =
+  | "ungated-write"
+  | "auth-without-actor-logging"
+  | "global-auth-over-sensitive-tools"
+  | "logging-without-attribution"
+  | "destructive-without-audit-trail";
+
+export interface AccountabilityGap {
+  /** Named pattern this gap represents */
+  pattern: AccountabilityGapPattern;
+  /** Specific instances where this gap was detected */
+  instances: Array<{ tool?: string; file: string; line: number }>;
+  /** What the human reviewer needs to verify */
+  reviewNote: string;
+}
+
 export interface ServerReport {
   /** Server name (derived from repo or provided) */
   name: string;
@@ -92,15 +108,19 @@ export interface ServerReport {
     auth: PatternMatch[];
     logging: PatternMatch[];
     gates: PatternMatch[];
+    actorAttribution: PatternMatch[];
   };
   /** Summary flags for quick review */
   flags: {
     hasAuth: boolean;
     hasPerToolAuth: boolean;
     hasLogging: boolean;
+    hasActorAttribution: boolean;
     hasConfirmationGates: boolean;
     hasWriteTools: boolean;
   };
+  /** Named accountability gap patterns detected */
+  accountabilityGaps: AccountabilityGap[];
   /** Errors or warnings during extraction */
   warnings: string[];
 }

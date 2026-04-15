@@ -5,8 +5,13 @@ import type { McpServerInput } from "./types.js";
 import { resolveSource } from "./clone.js";
 import { extractTools } from "./extract.js";
 import { refineClassifications } from "./classify.js";
-import { scanPatterns, assessAuthArchitecture } from "./patterns.js";
+import {
+  scanPatterns,
+  assessAuthArchitecture,
+  detectFrameworkImports,
+} from "./patterns.js";
 import { buildServerReport, buildAuditReport } from "./report.js";
+import { detectGaps } from "./gaps.js";
 
 /**
  * Detect the primary language of a repo by file extension frequency.
@@ -65,9 +70,20 @@ export function analyzeServer(input: McpServerInput): ServerReport {
   const tools = refineClassifications(rawTools);
 
   if (tools.length === 0) {
-    warnings.push(
-      "No tools extracted. The server may use an unsupported registration pattern."
-    );
+    // Loud miss: detect framework imports to distinguish "no MCP server here"
+    // from "MCP server with unsupported registration pattern"
+    const frameworks = detectFrameworkImports(localPath);
+    if (frameworks.length > 0) {
+      warnings.push(
+        `MCP framework detected (${frameworks.join("; ")}) but no tools were extracted. ` +
+        "This server likely uses a registration pattern not covered by automated extraction -- manual review required."
+      );
+    } else {
+      warnings.push(
+        "No tools extracted and no MCP framework imports detected. " +
+        "This may not be an MCP server, or it uses an unrecognized framework."
+      );
+    }
   }
 
   const patterns = scanPatterns(localPath);
@@ -84,12 +100,16 @@ export function analyzeServer(input: McpServerInput): ServerReport {
   );
 
   report.flags.hasPerToolAuth = authArch === "per-tool";
+  report.flags.hasActorAttribution = patterns.actorAttribution.length > 0;
 
   if (authArch === "unclear") {
     report.warnings.push(
       "Auth architecture is ambiguous -- found auth patterns in both tool files and separate modules."
     );
   }
+
+  // Detect named accountability gap patterns
+  report.accountabilityGaps = detectGaps(tools, patterns, authArch);
 
   return report;
 }

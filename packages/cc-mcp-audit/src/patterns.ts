@@ -50,17 +50,45 @@ const PATTERN_DEFS: PatternDef[] = [
   { type: "gate", patterns: GATE_PATTERNS },
 ];
 
+const ACTOR_ATTRIBUTION_PATTERNS: RegExp[] = [
+  /session[_-]?id/i,
+  /user[_-]?id/i,
+  /\bprincipal\b/i,
+  /\bcaller\b/i,
+  /auth\.user/i,
+  /context\.user/i,
+  /\bactor\b/i,
+  /request\.user/i,
+  /current[_-]?user/i,
+  /authenticated[_-]?user/i,
+];
+
+const MCP_FRAMEWORK_IMPORTS: RegExp[] = [
+  // Python
+  /from\s+mcp\s+import/,
+  /from\s+mcp\.server/,
+  /import\s+mcp/,
+  /from\s+fastmcp/,
+  /import\s+fastmcp/,
+  // TypeScript/JavaScript
+  /@modelcontextprotocol\/sdk/,
+  /from\s+["']mcp["']/,
+  /require\(["']mcp["']\)/,
+  /from\s+["']fastmcp["']/,
+];
+
 export interface PatternResults {
   auth: PatternMatch[];
   logging: PatternMatch[];
   gates: PatternMatch[];
+  actorAttribution: PatternMatch[];
 }
 
 /**
- * Scan a repo for auth, logging, and confirmation gate patterns.
+ * Scan a repo for auth, logging, confirmation gate, and actor attribution patterns.
  */
 export function scanPatterns(repoPath: string): PatternResults {
-  const results: PatternResults = { auth: [], logging: [], gates: [] };
+  const results: PatternResults = { auth: [], logging: [], gates: [], actorAttribution: [] };
   const sourceFiles = findScanFiles(repoPath);
 
   for (const filePath of sourceFiles) {
@@ -70,9 +98,10 @@ export function scanPatterns(repoPath: string): PatternResults {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      // Skip comments-only lines for lower noise
+      // Skip comment-only lines and string-only lines for lower noise
       const trimmed = line.trim();
       if (trimmed.startsWith("//") || trimmed.startsWith("#")) continue;
+      if (isStringLiteral(trimmed)) continue;
 
       for (const def of PATTERN_DEFS) {
         for (const pattern of def.patterns) {
@@ -89,10 +118,60 @@ export function scanPatterns(repoPath: string): PatternResults {
           }
         }
       }
+
+      // Actor attribution: check if logging lines also reference a principal
+      for (const pattern of ACTOR_ATTRIBUTION_PATTERNS) {
+        const match = line.match(pattern);
+        if (match) {
+          results.actorAttribution.push({
+            type: "logging",
+            match: match[0],
+            file: relPath,
+            line: i + 1,
+          });
+          break;
+        }
+      }
     }
   }
 
   return results;
+}
+
+/**
+ * Detect MCP framework imports in a repo.
+ * Used to warn when a server imports an MCP framework but zero tools were extracted.
+ */
+export function detectFrameworkImports(repoPath: string): string[] {
+  const frameworks: string[] = [];
+  const sourceFiles = findScanFiles(repoPath);
+
+  for (const filePath of sourceFiles) {
+    const content = readFileSync(filePath, "utf-8");
+    const relPath = relative(repoPath, filePath);
+
+    for (const pattern of MCP_FRAMEWORK_IMPORTS) {
+      if (pattern.test(content)) {
+        const match = content.match(pattern);
+        frameworks.push(`${match?.[0]} (${relPath})`);
+        break; // One match per file is enough
+      }
+    }
+  }
+
+  return frameworks;
+}
+
+/**
+ * Check if a trimmed line is purely a string literal (docstring, comment-like string).
+ * Reduces false positives from patterns matching inside string content.
+ */
+function isStringLiteral(trimmed: string): boolean {
+  // Python docstrings
+  if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) return true;
+  // Lines that are just a quoted string (e.g., description assignment value on its own line)
+  if (/^["'][^"']*["'],?\s*$/.test(trimmed)) return true;
+  return false;
 }
 
 /**

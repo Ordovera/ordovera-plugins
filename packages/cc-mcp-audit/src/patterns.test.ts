@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanPatterns, assessAuthArchitecture } from "./patterns.js";
+import { scanPatterns, assessAuthArchitecture, detectFrameworkImports } from "./patterns.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(__dirname, "..", "test-fixtures");
@@ -57,14 +57,50 @@ describe("scanPatterns", () => {
       expect(patterns.auth).toEqual([]);
       expect(patterns.logging).toEqual([]);
       expect(patterns.gates).toEqual([]);
+      expect(patterns.actorAttribution).toEqual([]);
     });
+  });
+
+  describe("actor attribution", () => {
+    it("detects actor attribution in Python server with user_id/session_id", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "python-server"));
+      expect(patterns.actorAttribution.length).toBeGreaterThan(0);
+      const matches = patterns.actorAttribution.map((p) => p.match);
+      const combined = matches.join(" ");
+      expect(combined).toMatch(/user_id|session_id/i);
+    });
+
+    it("returns empty attribution for server without principal identifiers", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "gated-server"));
+      expect(patterns.actorAttribution).toEqual([]);
+    });
+  });
+});
+
+describe("detectFrameworkImports", () => {
+  it("detects Python MCP framework imports", () => {
+    const frameworks = detectFrameworkImports(resolve(fixturesDir, "framework-no-tools"));
+    expect(frameworks.length).toBeGreaterThan(0);
+    const combined = frameworks.join(" ");
+    expect(combined).toMatch(/mcp|FastMCP/i);
+  });
+
+  it("detects TypeScript MCP SDK imports", () => {
+    const frameworks = detectFrameworkImports(resolve(fixturesDir, "ts-framework-no-tools"));
+    expect(frameworks.length).toBeGreaterThan(0);
+    expect(frameworks.join(" ")).toContain("@modelcontextprotocol/sdk");
+  });
+
+  it("returns empty for non-MCP repos", () => {
+    const frameworks = detectFrameworkImports(resolve(fixturesDir, "no-tools-server"));
+    expect(frameworks).toEqual([]);
   });
 });
 
 describe("assessAuthArchitecture", () => {
   it("returns 'none' when no auth patterns exist", () => {
     const result = assessAuthArchitecture(
-      { auth: [], logging: [], gates: [] },
+      { auth: [], logging: [], gates: [], actorAttribution: [] },
       new Set(["tools.py"])
     );
     expect(result).toBe("none");
@@ -76,6 +112,7 @@ describe("assessAuthArchitecture", () => {
         auth: [{ type: "auth", match: "Bearer", file: "auth.py", line: 1 }],
         logging: [],
         gates: [],
+        actorAttribution: [],
       },
       new Set(["tools.py"])
     );
@@ -88,6 +125,7 @@ describe("assessAuthArchitecture", () => {
         auth: [{ type: "auth", match: "scope", file: "tools.py", line: 5 }],
         logging: [],
         gates: [],
+        actorAttribution: [],
       },
       new Set(["tools.py"])
     );
@@ -103,6 +141,7 @@ describe("assessAuthArchitecture", () => {
         ],
         logging: [],
         gates: [],
+        actorAttribution: [],
       },
       new Set(["tools.py"])
     );

@@ -38,15 +38,43 @@ describe("analyzeServer", () => {
     expect(report.patterns.gates.length).toBeGreaterThan(0);
   });
 
-  it("warns when no tools are found", () => {
+  it("warns when no tools found and no framework detected", () => {
     const report = analyzeServer({
       source: resolve(fixturesDir, "no-tools-server"),
     });
 
     expect(report.tools).toEqual([]);
-    expect(report.warnings).toContain(
-      "No tools extracted. The server may use an unsupported registration pattern."
-    );
+    expect(report.warnings.some((w) => w.includes("no MCP framework imports detected"))).toBe(true);
+  });
+
+  it("warns loudly when framework detected but no tools extracted", () => {
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "framework-no-tools"),
+    });
+
+    expect(report.tools).toEqual([]);
+    expect(report.warnings.some((w) => w.includes("MCP framework detected"))).toBe(true);
+    expect(report.warnings.some((w) => w.includes("manual review required"))).toBe(true);
+  });
+
+  it("detects actor attribution", () => {
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "python-server"),
+    });
+
+    expect(report.flags.hasActorAttribution).toBe(true);
+  });
+
+  it("populates accountability gaps", () => {
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "ts-server"),
+    });
+
+    // TS server has write tools (send_email, update_record, deploy_app)
+    // with no gates and no logging -- should have gaps
+    expect(report.accountabilityGaps.length).toBeGreaterThan(0);
+    const gapPatterns = report.accountabilityGaps.map((g) => g.pattern);
+    expect(gapPatterns).toContain("ungated-write");
   });
 
   it("derives repo name from path when no name provided", () => {

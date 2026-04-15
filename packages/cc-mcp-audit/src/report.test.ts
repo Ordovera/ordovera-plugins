@@ -35,6 +35,7 @@ function makePatterns(): PatternResults {
       { type: "logging", match: "logger.info", file: "server.py", line: 12 },
     ],
     gates: [],
+    actorAttribution: [],
   };
 }
 
@@ -64,7 +65,7 @@ describe("buildServerReport", () => {
       "/local",
       "unknown",
       [],
-      { auth: [], logging: [], gates: [] },
+      { auth: [], logging: [], gates: [], actorAttribution: [] },
       ["No tools found"]
     );
     expect(report.warnings).toContain("No tools found");
@@ -79,7 +80,7 @@ describe("buildAuditReport", () => {
     const s2 = buildServerReport(
       "s2", "url2", "typescript",
       [makeTools()[0]], // read-only server
-      { auth: [], logging: [], gates: [] },
+      { auth: [], logging: [], gates: [], actorAttribution: [] },
       []
     );
 
@@ -126,7 +127,7 @@ describe("formatMarkdown", () => {
       "/local",
       "python",
       makeTools(),
-      { auth: [], logging: [], gates: [] },
+      { auth: [], logging: [], gates: [], actorAttribution: [] },
       []
     );
     const report = buildAuditReport([server]);

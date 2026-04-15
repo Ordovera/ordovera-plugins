@@ -1,9 +1,10 @@
 export { analyzeServer, analyzeServers } from "./analyze.js";
 export { extractTools } from "./extract.js";
-export { scanPatterns, assessAuthArchitecture } from "./patterns.js";
+export { scanPatterns, assessAuthArchitecture, detectFrameworkImports } from "./patterns.js";
 export { refineClassifications } from "./classify.js";
 export { resolveSource } from "./clone.js";
 export { buildServerReport, buildAuditReport, formatMarkdown } from "./report.js";
+export { detectGaps } from "./gaps.js";
 export { discover, parseCuratedList, extractGitHubUrls } from "./discover.js";
 export type {
   McpServerInput,
@@ -11,6 +12,8 @@ export type {
   PatternMatch,
   ServerReport,
   AuditReport,
+  AccountabilityGap,
+  AccountabilityGapPattern,
   DiscoveredServer,
   CandidateFile,
   DiscoveryFilters,
