@@ -381,7 +381,7 @@ export async function verifyPlugins(
       }
     }
     if (!depScan || !depScan.has_bundled_deps) {
-      skipped.dep_scan = "Plugin has no bundled dependencies (stdlib only)";
+      skipped.dep_scan = `No dependency manifests found in plugin (checked: package.json, requirements.txt, Pipfile, pyproject.toml, Cargo.toml, Gemfile, go.mod, composer.json)`;
     }
     if (!depAudit) {
       if (!options?.auditDeps) {

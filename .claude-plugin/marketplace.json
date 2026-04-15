@@ -16,7 +16,7 @@
     },
     {
       "name": "top10-scan",
-      "description": "OWASP Top 10:2025 multi-layer security audit. Orchestrates Opengrep (SAST), ZAP (DAST), and Dependency-Check (SCA) alongside Claude's design-level analysis.",
+      "description": "OWASP Top 10:2025 multi-layer security audit. Orchestrates Opengrep (SAST), ZAP (DAST), and native package manager SCA (npm audit, pip-audit, cargo audit, govulncheck) alongside Claude's design-level analysis.",
       "source": "./plugins/top10-scan",
       "category": "security",
       "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/plugins/top10-scan"
