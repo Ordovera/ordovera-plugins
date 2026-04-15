@@ -1,0 +1,5 @@
+{
+  "denied_tools": ["Agent"],
+  "restricted_paths": ["/etc/", ".env"],
+  "max_autonomous_turns": 20
+}

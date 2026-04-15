@@ -1,0 +1,33 @@
+{
+  "name": "cc-session-audit",
+  "version": "0.1.0",
+  "description": "Compliance analyzer for Claude Code sessions. Forensic analysis of tool use, MCP servers, autonomous behavior, and policy violations.",
+  "type": "module",
+  "bin": {
+    "cc-session-audit": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "claude-code",
+    "governance",
+    "compliance",
+    "session-audit",
+    "llm",
+    "ai-governance"
+  ],
+  "author": {
+    "name": "Brian Fending",
+    "email": "brian@ordovera.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}

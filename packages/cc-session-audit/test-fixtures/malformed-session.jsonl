@@ -1,0 +1,6 @@
+not json at all
+{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-04-15T10:00:00.000Z","sessionId":"test-malformed","message":{"role":"user","content":"valid message"},"cwd":"/tmp","userType":"external"}
+{broken json
+{"type":"unknown_type","uuid":"u2","timestamp":"2026-04-15T10:00:01.000Z"}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-04-15T10:00:05.000Z","sessionId":"test-malformed","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"response"}]},"cwd":"/tmp","userType":"external"}
+

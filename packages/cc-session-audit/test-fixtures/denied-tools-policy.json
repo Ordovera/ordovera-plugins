@@ -1,0 +1,4 @@
+{
+  "denied_tools": ["Bash", "Write"],
+  "approved_tools": ["Read", "Grep", "Glob"]
+}

@@ -1,0 +1,6 @@
+{
+  "approved_mcp_servers": ["claude_ai_Atlassian"],
+  "denied_mcp_servers": ["claude_ai_Gmail"],
+  "restricted_paths": [".env"],
+  "max_autonomous_turns": 3
+}
