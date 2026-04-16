@@ -20,12 +20,18 @@ export function detectGaps(
   const gaps: AccountabilityGap[] = [];
 
   const writeTools = tools.filter((t) => t.classification === "write");
-  const gateFiles = new Set(patterns.gates.map((g) => g.file));
+  // A write tool is "gated" if either a confirmation gate OR a staged-execution
+  // mechanism is co-located in its source file.
+  const safetyMechanismFiles = new Set([
+    ...patterns.gates.map((g) => g.file),
+    ...patterns.stagedExecution.map((s) => s.file),
+  ]);
   const logFiles = new Set(patterns.logging.map((l) => l.file));
   const hasAttributedLogs = hasLogAdjacentAttribution(patterns);
 
-  // 1. Ungated write tools: write tool with no gate pattern in the same file
-  const ungated = writeTools.filter((t) => !gateFiles.has(t.sourceFile));
+  // 1. Ungated write tools: write tool with no confirmation gate or
+  //    staged-execution mechanism in the same file
+  const ungated = writeTools.filter((t) => !safetyMechanismFiles.has(t.sourceFile));
   if (ungated.length > 0) {
     gaps.push({
       pattern: "ungated-write",
@@ -36,8 +42,9 @@ export function detectGaps(
         line: t.sourceLine,
       })),
       reviewNote:
-        "These write tools have no confirmation gate co-located in their source file. " +
-        "Verify whether gates exist at the client layer or in middleware not detected by static analysis.",
+        "These write tools have no confirmation gate or staged-execution mechanism " +
+        "(dry-run, preview, sandbox) co-located in their source file. " +
+        "Verify whether safety mechanisms exist at the client layer or in middleware not detected by static analysis.",
     });
   }
 

@@ -20,7 +20,10 @@ function makePatterns(overrides: Partial<PatternResults> = {}): PatternResults {
     auth: [],
     logging: [],
     gates: [],
+    stagedExecution: [],
     actorAttribution: [],
+    rateLimit: [],
+    leastPrivilege: [],
     ...overrides,
   };
 }

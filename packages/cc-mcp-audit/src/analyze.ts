@@ -13,6 +13,7 @@ import {
 } from "./patterns.js";
 import { buildServerReport, buildAuditReport } from "./report.js";
 import { detectGaps } from "./gaps.js";
+import { deriveIndicators } from "./indicators.js";
 
 /**
  * Detect the primary language of a repo by file extension frequency.
@@ -112,6 +113,9 @@ export function analyzeServer(input: McpServerInput): ServerReport {
 
   // Detect named accountability gap patterns
   report.accountabilityGaps = detectGaps(tools, patterns, authArch);
+
+  // Derive three-valued coding indicators from the populated report
+  report.indicators = deriveIndicators(report);
 
   return report;
 }

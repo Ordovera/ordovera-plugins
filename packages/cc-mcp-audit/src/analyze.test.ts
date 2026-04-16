@@ -78,6 +78,26 @@ describe("analyzeServer", () => {
     expect(gapPatterns).toContain("ungated-write");
   });
 
+  it("detects rate limiting and least privilege in governed server", () => {
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "governed-server"),
+    });
+
+    expect(report.flags.hasRateLimiting).toBe(true);
+    expect(report.flags.hasLeastPrivilege).toBe(true);
+    expect(report.patterns.rateLimit.length).toBeGreaterThan(0);
+    expect(report.patterns.leastPrivilege.length).toBeGreaterThan(0);
+  });
+
+  it("reports absence of rate limiting and least privilege", () => {
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "ts-server"),
+    });
+
+    expect(report.flags.hasRateLimiting).toBe(false);
+    expect(report.flags.hasLeastPrivilege).toBe(false);
+  });
+
   it("derives repo name from path when no name provided", () => {
     const report = analyzeServer({
       source: resolve(fixturesDir, "python-server"),

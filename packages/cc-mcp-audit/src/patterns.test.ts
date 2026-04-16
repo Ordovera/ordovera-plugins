@@ -38,15 +38,26 @@ describe("scanPatterns", () => {
   describe("gated server", () => {
     const patterns = scanPatterns(resolve(fixturesDir, "gated-server"));
 
-    it("detects confirmation gates", () => {
-      expect(patterns.gates.length).toBeGreaterThan(0);
-    });
-
-    it("finds dry_run, confirmation, approval, sandbox, and preview keywords", () => {
+    it("detects confirmation gates (approval keywords only)", () => {
       const gateMatches = patterns.gates.map((p) => p.match.toLowerCase());
       const combined = gateMatches.join(" ");
-      // Should find at least some of: dry_run, preview, confirmation, approval, sandbox
-      expect(combined).toMatch(/dry_run|preview|confirm|approv|sandbox/i);
+      // gated-server fixture has 'confirmation' and 'approval'
+      expect(combined).toMatch(/confirm|approv/i);
+    });
+
+    it("does not include staged-execution keywords in confirmation gates", () => {
+      const gateMatches = patterns.gates.map((p) => p.match.toLowerCase());
+      const combined = gateMatches.join(" ");
+      // These belong to stagedExecution, not gates
+      expect(combined).not.toMatch(/dry_run|preview|sandbox|simulat/);
+    });
+
+    it("detects staged execution separately", () => {
+      // gated-server fixture has dry_run, simulate, sandbox, read-only
+      expect(patterns.stagedExecution.length).toBeGreaterThan(0);
+      const stagedMatches = patterns.stagedExecution.map((p) => p.match.toLowerCase());
+      const combined = stagedMatches.join(" ");
+      expect(combined).toMatch(/dry_run|simulat|sandbox|read[_-]?only/i);
     });
   });
 
@@ -75,6 +86,36 @@ describe("scanPatterns", () => {
       expect(patterns.actorAttribution).toEqual([]);
     });
   });
+
+  describe("rate limiting", () => {
+    it("detects rate limiting patterns in governed server", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "governed-server"));
+      expect(patterns.rateLimit.length).toBeGreaterThan(0);
+      const matches = patterns.rateLimit.map((p) => p.match);
+      const combined = matches.join(" ");
+      expect(combined).toMatch(/slowapi|limit/i);
+    });
+
+    it("returns empty for servers without rate limiting", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "ts-server"));
+      expect(patterns.rateLimit).toEqual([]);
+    });
+  });
+
+  describe("least privilege", () => {
+    it("detects least privilege scoping in governed server", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "governed-server"));
+      expect(patterns.leastPrivilege.length).toBeGreaterThan(0);
+      const matches = patterns.leastPrivilege.map((p) => p.match);
+      const combined = matches.join(" ");
+      expect(combined).toMatch(/scopes|PERMISSIONS|allowed_operations/i);
+    });
+
+    it("returns empty for servers without privilege scoping", () => {
+      const patterns = scanPatterns(resolve(fixturesDir, "no-tools-server"));
+      expect(patterns.leastPrivilege).toEqual([]);
+    });
+  });
 });
 
 describe("detectFrameworkImports", () => {
@@ -100,7 +141,7 @@ describe("detectFrameworkImports", () => {
 describe("assessAuthArchitecture", () => {
   it("returns 'none' when no auth patterns exist", () => {
     const result = assessAuthArchitecture(
-      { auth: [], logging: [], gates: [], actorAttribution: [] },
+      { auth: [], logging: [], gates: [], stagedExecution: [], actorAttribution: [], rateLimit: [], leastPrivilege: [] },
       new Set(["tools.py"])
     );
     expect(result).toBe("none");
@@ -112,7 +153,10 @@ describe("assessAuthArchitecture", () => {
         auth: [{ type: "auth", match: "Bearer", file: "auth.py", line: 1 }],
         logging: [],
         gates: [],
+        stagedExecution: [],
         actorAttribution: [],
+        rateLimit: [],
+        leastPrivilege: [],
       },
       new Set(["tools.py"])
     );
@@ -125,7 +169,10 @@ describe("assessAuthArchitecture", () => {
         auth: [{ type: "auth", match: "scope", file: "tools.py", line: 5 }],
         logging: [],
         gates: [],
+        stagedExecution: [],
         actorAttribution: [],
+        rateLimit: [],
+        leastPrivilege: [],
       },
       new Set(["tools.py"])
     );
@@ -141,7 +188,10 @@ describe("assessAuthArchitecture", () => {
         ],
         logging: [],
         gates: [],
+        stagedExecution: [],
         actorAttribution: [],
+        rateLimit: [],
+        leastPrivilege: [],
       },
       new Set(["tools.py"])
     );

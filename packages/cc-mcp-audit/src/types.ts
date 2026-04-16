@@ -67,7 +67,7 @@ export interface ExtractedTool {
 
 export interface PatternMatch {
   /** Type of pattern detected */
-  type: "auth" | "logging" | "gate" | "attribution";
+  type: "auth" | "logging" | "gate" | "attribution" | "rateLimit" | "leastPrivilege" | "stagedExecution";
   /** The matched text or identifier */
   match: string;
   /** File where the pattern was found */
@@ -110,7 +110,10 @@ export interface ServerReport {
     auth: PatternMatch[];
     logging: PatternMatch[];
     gates: PatternMatch[];
+    stagedExecution: PatternMatch[];
     actorAttribution: PatternMatch[];
+    rateLimit: PatternMatch[];
+    leastPrivilege: PatternMatch[];
   };
   /** Summary flags for quick review */
   flags: {
@@ -122,12 +125,42 @@ export interface ServerReport {
     /** Whether log statements carry principal identifiers (stricter: log-adjacent) */
     hasAttributedLogging: boolean;
     hasConfirmationGates: boolean;
+    hasStagedExecution: boolean;
     hasWriteTools: boolean;
+    hasRateLimiting: boolean;
+    hasLeastPrivilege: boolean;
   };
+  /** Three-valued coding indicators (Present / Absent / Indeterminate) */
+  indicators: CodingIndicators;
   /** Named accountability gap patterns detected */
   accountabilityGaps: AccountabilityGap[];
   /** Errors or warnings during extraction */
   warnings: string[];
+}
+
+export type IndicatorValue = "Present" | "Absent" | "Indeterminate";
+
+export interface CodingIndicators {
+  /** Authentication mechanism exists */
+  authentication: IndicatorValue;
+  /** Auth is applied per-tool rather than globally */
+  perToolAuth: IndicatorValue;
+  /** Read/write separation in tool design */
+  readWriteSeparation: IndicatorValue;
+  /** Least privilege scoping (OAuth scopes, permission sets, capability restrictions) */
+  leastPrivilege: IndicatorValue;
+  /** Confirmation gates: explicit approval flow before execution */
+  confirmationGates: IndicatorValue;
+  /** Staged/reversible execution: dry-run, preview, sandbox, undo */
+  stagedExecution: IndicatorValue;
+  /** Audit logging present */
+  auditLogging: IndicatorValue;
+  /** Logging carries actor attribution (user_id, session_id near log calls) */
+  actorAttribution: IndicatorValue;
+  /** Rate limiting or throttling */
+  rateLimiting: IndicatorValue;
+  /** Sensitive capability isolation via file or namespace structure */
+  sensitiveCapabilityIsolation: IndicatorValue;
 }
 
 export interface AuditReport {

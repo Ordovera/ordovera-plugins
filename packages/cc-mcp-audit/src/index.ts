@@ -5,6 +5,7 @@ export { refineClassifications } from "./classify.js";
 export { resolveSource } from "./clone.js";
 export { buildServerReport, buildAuditReport, formatMarkdown } from "./report.js";
 export { detectGaps } from "./gaps.js";
+export { deriveIndicators } from "./indicators.js";
 export { discover, parseCuratedList, extractGitHubUrls } from "./discover.js";
 export type {
   McpServerInput,
@@ -14,6 +15,8 @@ export type {
   AuditReport,
   AccountabilityGap,
   AccountabilityGapPattern,
+  CodingIndicators,
+  IndicatorValue,
   DiscoveredServer,
   CandidateFile,
   DiscoveryFilters,

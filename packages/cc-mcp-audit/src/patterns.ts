@@ -32,9 +32,21 @@ const LOGGING_PATTERNS: RegExp[] = [
   /span\.set/i,
 ];
 
+/**
+ * Confirmation gates: explicit user-action-required approval flows.
+ * The agent or user must take a distinct step before execution proceeds.
+ */
 const GATE_PATTERNS: RegExp[] = [
   /confirm(?:ation)?/i,
   /approv(?:e|al)/i,
+];
+
+/**
+ * Staged/reversible execution: mechanisms that let a call run in a safe
+ * mode producing no real effect (or a reversible effect). These enable
+ * preview-before-commit or undo semantics, distinct from approval flows.
+ */
+const STAGED_EXECUTION_PATTERNS: RegExp[] = [
   /\bdry[_-]?run\b/i,
   /\bsimulat/i,
   /\bpreview\b/i,
@@ -42,12 +54,49 @@ const GATE_PATTERNS: RegExp[] = [
   /\bsafe[_-]?mode\b/i,
   /read[_-]?only/i,
   /\bvalidat(?:e|ion)\b.*before/i,
+  /\brollback\b/i,
+  /\bundo\b/i,
+  /\brevert\b/i,
+];
+
+const RATE_LIMIT_PATTERNS: RegExp[] = [
+  /rate[_-]?limit/i,
+  /\bthrottl/i,
+  /RateLimiter/,
+  /\bslowapi\b/i,
+  /requests[_-]?per[_-]?(?:second|minute|hour)/i,
+  /\bbucket\b.*\btoken\b/i,
+  /\bmax[_-]?requests\b/i,
+  /\bcooldown\b/i,
+  /\bdebounce\b/i,
+];
+
+const LEAST_PRIVILEGE_PATTERNS: RegExp[] = [
+  // OAuth / permission scope configuration
+  /\bscopes?\s*[=:]\s*\[/i,
+  /required[_-]?scopes?/i,
+  /allowed[_-]?(?:scopes?|permissions?|operations?)/i,
+  /permission[_-]?(?:set|list|map|config)/i,
+  // Capability restriction
+  /\ballow[_-]?list/i,
+  /\bdeny[_-]?list/i,
+  /\bwhitelist/i,
+  /\bblacklist/i,
+  // Tool-level access control
+  /tool[_-]?permissions?/i,
+  /capability[_-]?(?:check|grant|restrict)/i,
+  /\brestrict(?:ed)?[_-]?tools?\b/i,
+  // Namespace / isolation
+  /namespace[_-]?(?:isolat|restrict|scope)/i,
 ];
 
 const PATTERN_DEFS: PatternDef[] = [
   { type: "auth", patterns: AUTH_PATTERNS },
   { type: "logging", patterns: LOGGING_PATTERNS },
   { type: "gate", patterns: GATE_PATTERNS },
+  { type: "stagedExecution", patterns: STAGED_EXECUTION_PATTERNS },
+  { type: "rateLimit", patterns: RATE_LIMIT_PATTERNS },
+  { type: "leastPrivilege", patterns: LEAST_PRIVILEGE_PATTERNS },
 ];
 
 const ACTOR_ATTRIBUTION_PATTERNS: RegExp[] = [
@@ -81,14 +130,17 @@ export interface PatternResults {
   auth: PatternMatch[];
   logging: PatternMatch[];
   gates: PatternMatch[];
+  stagedExecution: PatternMatch[];
   actorAttribution: PatternMatch[];
+  rateLimit: PatternMatch[];
+  leastPrivilege: PatternMatch[];
 }
 
 /**
  * Scan a repo for auth, logging, confirmation gate, and actor attribution patterns.
  */
 export function scanPatterns(repoPath: string): PatternResults {
-  const results: PatternResults = { auth: [], logging: [], gates: [], actorAttribution: [] };
+  const results: PatternResults = { auth: [], logging: [], gates: [], stagedExecution: [], actorAttribution: [], rateLimit: [], leastPrivilege: [] };
   const sourceFiles = findScanFiles(repoPath);
 
   for (const filePath of sourceFiles) {
@@ -107,7 +159,12 @@ export function scanPatterns(repoPath: string): PatternResults {
         for (const pattern of def.patterns) {
           const match = line.match(pattern);
           if (match) {
-            const key: keyof PatternResults = def.type === "gate" ? "gates" : def.type as keyof PatternResults;
+            const keyMap: Record<string, keyof PatternResults> = {
+              auth: "auth", logging: "logging", gate: "gates",
+              stagedExecution: "stagedExecution",
+              rateLimit: "rateLimit", leastPrivilege: "leastPrivilege",
+            };
+            const key = keyMap[def.type] ?? (def.type as keyof PatternResults);
             results[key].push({
               type: def.type,
               match: match[0],

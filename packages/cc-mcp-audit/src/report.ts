@@ -34,8 +34,23 @@ export function buildServerReport(
       hasAttributionIdentifiers: false, // Set by caller
       hasAttributedLogging: false, // Set by caller after hasLogAdjacentAttribution
       hasConfirmationGates: patterns.gates.length > 0,
+      hasStagedExecution: patterns.stagedExecution.length > 0,
       hasWriteTools: sensitiveToolCount > 0,
+      hasRateLimiting: patterns.rateLimit.length > 0,
+      hasLeastPrivilege: patterns.leastPrivilege.length > 0,
     },
+    indicators: {
+      authentication: "Absent",
+      perToolAuth: "Absent",
+      readWriteSeparation: "Absent",
+      leastPrivilege: "Absent",
+      confirmationGates: "Absent",
+      auditLogging: "Absent",
+      stagedExecution: "Absent",
+      actorAttribution: "Absent",
+      rateLimiting: "Absent",
+      sensitiveCapabilityIsolation: "Absent",
+    }, // Set by caller after deriveIndicators
     accountabilityGaps: [], // Set by caller after detectGaps
     warnings,
   };
@@ -115,10 +130,10 @@ function formatComparisonTable(servers: ServerReport[]): string[] {
   lines.push("## Accountability Comparison");
   lines.push("");
   lines.push(
-    "| Server | Write Tools | Auth | Attributed Logs | Logging | Gates | Gaps |"
+    "| Server | Write Tools | Auth | Attr. Logs | Gates | Rate Limit | Least Priv. | Gaps |"
   );
   lines.push(
-    "|--------|-------------|------|-----------------|---------|-------|------|"
+    "|--------|-------------|------|------------|-------|------------|-------------|------|"
   );
 
   for (const s of servers) {
@@ -129,14 +144,15 @@ function formatComparisonTable(servers: ServerReport[]): string[] {
         ? "global"
         : "none";
     const attribution = s.flags.hasAttributedLogging ? "yes" : "no";
-    const logging = s.flags.hasLogging ? "yes" : "no";
     const gates = s.flags.hasConfirmationGates ? "yes" : "no";
+    const rateLimit = s.flags.hasRateLimiting ? "yes" : "no";
+    const leastPriv = s.flags.hasLeastPrivilege ? "yes" : "no";
     const gapNames = s.accountabilityGaps.length > 0
       ? s.accountabilityGaps.map((g) => abbreviateGap(g.pattern, g.confidence)).join(", ")
       : "-";
 
     lines.push(
-      `| ${s.name} | ${writeCount} | ${auth} | ${attribution} | ${logging} | ${gates} | ${gapNames} |`
+      `| ${s.name} | ${writeCount} | ${auth} | ${attribution} | ${gates} | ${rateLimit} | ${leastPriv} | ${gapNames} |`
     );
   }
 
@@ -191,6 +207,24 @@ function formatServerSection(server: ServerReport): string[] {
   );
   lines.push("");
 
+  // Coding indicators (three-valued: Present / Absent / Indeterminate)
+  lines.push("### Coding Indicators");
+  lines.push("");
+  lines.push("| Indicator | Value |");
+  lines.push("|-----------|-------|");
+  const ind = server.indicators;
+  lines.push(`| Authentication | ${ind.authentication} |`);
+  lines.push(`| Per-tool authorization | ${ind.perToolAuth} |`);
+  lines.push(`| Read/write separation | ${ind.readWriteSeparation} |`);
+  lines.push(`| Least privilege scoping | ${ind.leastPrivilege} |`);
+  lines.push(`| Confirmation gates | ${ind.confirmationGates} |`);
+  lines.push(`| Staged/reversible execution | ${ind.stagedExecution} |`);
+  lines.push(`| Audit logging | ${ind.auditLogging} |`);
+  lines.push(`| Actor attribution | ${ind.actorAttribution} |`);
+  lines.push(`| Rate limiting | ${ind.rateLimiting} |`);
+  lines.push(`| Sensitive capability isolation | ${ind.sensitiveCapabilityIsolation} |`);
+  lines.push("");
+
   // Pattern flags
   lines.push("### Pattern Flags");
   lines.push("");
@@ -210,7 +244,16 @@ function formatServerSection(server: ServerReport): string[] {
     `- [${server.flags.hasConfirmationGates ? "X" : " "}] Confirmation gates (${server.patterns.gates.length} occurrences)`
   );
   lines.push(
+    `- [${server.flags.hasStagedExecution ? "X" : " "}] Staged/reversible execution (${server.patterns.stagedExecution.length} occurrences)`
+  );
+  lines.push(
     `- [${server.flags.hasWriteTools ? "X" : " "}] Write/modify tools present`
+  );
+  lines.push(
+    `- [${server.flags.hasRateLimiting ? "X" : " "}] Rate limiting (${server.patterns.rateLimit.length} occurrences)`
+  );
+  lines.push(
+    `- [${server.flags.hasLeastPrivilege ? "X" : " "}] Least privilege scoping (${server.patterns.leastPrivilege.length} occurrences)`
   );
   lines.push("");
 

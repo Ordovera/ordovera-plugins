@@ -35,7 +35,10 @@ function makePatterns(): PatternResults {
       { type: "logging", match: "logger.info", file: "server.py", line: 12 },
     ],
     gates: [],
+    stagedExecution: [],
     actorAttribution: [],
+    rateLimit: [],
+    leastPrivilege: [],
   };
 }
 
@@ -65,7 +68,7 @@ describe("buildServerReport", () => {
       "/local",
       "unknown",
       [],
-      { auth: [], logging: [], gates: [], actorAttribution: [] },
+      { auth: [], logging: [], gates: [], stagedExecution: [], actorAttribution: [], rateLimit: [], leastPrivilege: [] },
       ["No tools found"]
     );
     expect(report.warnings).toContain("No tools found");
@@ -80,7 +83,7 @@ describe("buildAuditReport", () => {
     const s2 = buildServerReport(
       "s2", "url2", "typescript",
       [makeTools()[0]], // read-only server
-      { auth: [], logging: [], gates: [], actorAttribution: [] },
+      { auth: [], logging: [], gates: [], stagedExecution: [], actorAttribution: [], rateLimit: [], leastPrivilege: [] },
       []
     );
 
@@ -127,7 +130,7 @@ describe("formatMarkdown", () => {
       "/local",
       "python",
       makeTools(),
-      { auth: [], logging: [], gates: [], actorAttribution: [] },
+      { auth: [], logging: [], gates: [], stagedExecution: [], actorAttribution: [], rateLimit: [], leastPrivilege: [] },
       []
     );
     const report = buildAuditReport([server]);
