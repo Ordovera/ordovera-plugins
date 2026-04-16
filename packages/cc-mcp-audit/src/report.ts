@@ -50,6 +50,9 @@ export function buildServerReport(
       actorAttribution: "Absent",
       rateLimiting: "Absent",
       sensitiveCapabilityIsolation: "Absent",
+      selfModificationPrevention: null,
+      subAgentAuthorityConstraints: null,
+      permissionBoundaryEnforcement: null,
     }, // Set by caller after deriveIndicators
     accountabilityGaps: [], // Set by caller after detectGaps
     warnings,
@@ -223,7 +226,29 @@ function formatServerSection(server: ServerReport): string[] {
   lines.push(`| Actor attribution | ${ind.actorAttribution} |`);
   lines.push(`| Rate limiting | ${ind.rateLimiting} |`);
   lines.push(`| Sensitive capability isolation | ${ind.sensitiveCapabilityIsolation} |`);
+  lines.push(`| Self-modification prevention (Domain 5) | ${ind.selfModificationPrevention ?? "(human review required)"} |`);
+  lines.push(`| Sub-agent authority constraints (Domain 5) | ${ind.subAgentAuthorityConstraints ?? "(human review required)"} |`);
+  lines.push(`| Permission boundary enforcement (Domain 5) | ${ind.permissionBoundaryEnforcement ?? "(human review required)"} |`);
   lines.push("");
+
+  // LLM screening hints for Domain 5 (optional)
+  if (server.screeningSignals) {
+    lines.push("### Human Review Required (Domain 5)");
+    lines.push("");
+    const s = server.screeningSignals;
+    lines.push(...formatScreeningHint("Self-modification prevention", s.selfModificationPrevention));
+    lines.push(...formatScreeningHint("Sub-agent authority constraints", s.subAgentAuthorityConstraints));
+    lines.push(...formatScreeningHint("Permission boundary enforcement", s.permissionBoundaryEnforcement));
+    lines.push("");
+    if (server.screeningMetadata) {
+      const m = server.screeningMetadata;
+      const costDisplay = m.estimatedCostUsd > 0 ? ` | ~$${m.estimatedCostUsd.toFixed(4)}` : "";
+      lines.push(
+        `Screening: ${m.model} | prompt ${m.promptVersion} | ${m.totalTokens} tokens${costDisplay}`
+      );
+      lines.push("");
+    }
+  }
 
   // Pattern flags
   lines.push("### Pattern Flags");
@@ -323,4 +348,21 @@ const GAP_ABBREVIATIONS: Record<string, string> = {
 function abbreviateGap(pattern: string, confidence: string): string {
   const code = GAP_ABBREVIATIONS[pattern] ?? pattern;
   return confidence === "low" ? `${code}?` : code;
+}
+
+function formatScreeningHint(
+  label: string,
+  signal: { likelihood: string; notes: string; citations: Array<{ file: string; line: number }> } | undefined
+): string[] {
+  if (!signal) {
+    return [`- [ ] ${label} -- no screening signal available`];
+  }
+
+  const citationStr =
+    signal.citations.length > 0
+      ? ` -- ${signal.citations.map((c) => `${c.file}:${c.line}`).join(", ")}`
+      : "";
+
+  const hint = `screening hint: ${signal.likelihood}${signal.notes ? ` (${signal.notes})` : ""}${citationStr}`;
+  return [`- [ ] ${label} -- ${hint}`];
 }

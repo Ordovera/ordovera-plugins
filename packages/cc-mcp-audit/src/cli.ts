@@ -3,17 +3,23 @@
 import { parseArgs } from "node:util";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { McpServerInput } from "./types.js";
+import type { McpServerInput, ServerReport } from "./types.js";
 import { analyzeServer, analyzeServers } from "./analyze.js";
 import { formatMarkdown } from "./report.js";
 import { discover } from "./discover.js";
+import { resolveSource } from "./clone.js";
+import { screenServer } from "./screen.js";
+import { selectProvider } from "./screen-providers.js";
 
 const subcommand = process.argv[2];
 
 if (subcommand === "discover") {
   runDiscover();
 } else {
-  runAnalyze();
+  runAnalyze().catch((err) => {
+    console.error(`Analysis failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
 }
 
 function runDiscover(): void {
@@ -96,13 +102,17 @@ Examples:
   });
 }
 
-function runAnalyze(): void {
+async function runAnalyze(): Promise<void> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
       output: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "json" },
       candidates: { type: "string", short: "c" },
+      "llm-screen": { type: "boolean", default: false },
+      "llm-provider": { type: "string", default: "auto" },
+      "llm-model": { type: "string", default: "claude-haiku-4-5-20251001" },
+      "llm-budget": { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -116,10 +126,25 @@ Usage:
   cc-mcp-audit discover [options]           Find MCP server candidates
 
 Options:
-  -o, --output <file>      Write report to file (default: stdout)
-  -f, --format <fmt>       Output format: json | markdown (default: json)
-  -c, --candidates <file>  JSON file with array of {source, name?} entries
-  -h, --help               Show this help
+  -o, --output <file>       Write report to file (default: stdout)
+  -f, --format <fmt>        Output format: json | markdown (default: json)
+  -c, --candidates <file>   JSON file with array of {source, name?} entries
+  --llm-screen              Enable LLM triage hints for Domain 5 indicators
+  --llm-provider <id>       claude-code | anthropic-api | auto (default: auto)
+  --llm-model <id>          Model to use (default: claude-haiku-4-5-20251001)
+  --llm-budget <usd>        Abort further LLM calls if cost exceeds this
+  -h, --help                Show this help
+
+LLM screening produces triage hints for Domain 5 indicators
+(self-modification prevention, sub-agent authority, permission boundaries).
+Hints are stored in ServerReport.screeningSignals and are NEVER treated as
+coding values -- Domain 5 indicator values remain null until a human fills
+them in during review.
+
+Provider behavior:
+  auto           Use Claude Code CLI if on PATH, else ANTHROPIC_API_KEY
+  claude-code    Use Claude Code CLI (inherits subscription auth)
+  anthropic-api  Use direct API (requires ANTHROPIC_API_KEY env var)
 
 Run 'cc-mcp-audit discover --help' for discovery options.
 
@@ -127,6 +152,7 @@ Examples:
   cc-mcp-audit https://github.com/crystaldba/postgres-mcp
   cc-mcp-audit ./local-server-repo --format markdown
   cc-mcp-audit -c servers.json -o report.json
+  cc-mcp-audit -c servers.json --llm-screen -o report.json
   cc-mcp-audit discover --min-stars 50 -o candidates.json`);
     process.exit(0);
   }
@@ -142,10 +168,53 @@ Examples:
     inputs = positionals.map((source) => ({ source }));
   }
 
-  const report =
-    inputs.length === 1
-      ? { ...buildSingleReport(inputs[0]), schemaVersion: "0.1.0" as const }
-      : analyzeServers(inputs);
+  const singleReport = inputs.length === 1 ? buildSingleReport(inputs[0]) : null;
+  const multiReport = inputs.length > 1 ? analyzeServers(inputs) : null;
+
+  const serverReports: ServerReport[] = multiReport
+    ? multiReport.servers
+    : singleReport
+      ? [singleReport]
+      : [];
+
+  // Optional LLM screening pass for Domain 5 indicators
+  if (values["llm-screen"]) {
+    const provider = selectProvider(
+      values["llm-provider"] as "claude-code" | "anthropic-api" | "auto",
+      values["llm-model"] ?? "claude-haiku-4-5-20251001"
+    );
+    const budgetUsd = values["llm-budget"]
+      ? parseFloat(values["llm-budget"])
+      : undefined;
+
+    console.error(
+      `Running LLM screening pass (${provider.id}, model=${provider.model})...`
+    );
+
+    for (const [idx, server] of serverReports.entries()) {
+      const { localPath } = resolveSource(server.source);
+      try {
+        const screenResult = await screenServer(localPath, {
+          provider,
+          budgetUsd,
+        });
+        server.screeningSignals = screenResult.signals;
+        server.screeningMetadata = screenResult.metadata;
+        console.error(
+          `  [${idx + 1}/${serverReports.length}] ${server.name}: screened`
+        );
+      } catch (err) {
+        console.error(
+          `  [${idx + 1}/${serverReports.length}] ${server.name}: screening failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
+  const report = multiReport ?? {
+    ...singleReport!,
+    schemaVersion: "0.1.0" as const,
+  };
 
   const output =
     values.format === "markdown"

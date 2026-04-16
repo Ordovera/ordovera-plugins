@@ -7,6 +7,16 @@ export { buildServerReport, buildAuditReport, formatMarkdown } from "./report.js
 export { detectGaps } from "./gaps.js";
 export { deriveIndicators } from "./indicators.js";
 export { discover, parseCuratedList, extractGitHubUrls } from "./discover.js";
+export { screenServer } from "./screen.js";
+export { extractRegions, formatRegions } from "./screen-regions.js";
+export { buildPrompt, PROMPT_VERSION } from "./screen-prompts.js";
+export {
+  selectProvider,
+  claudeCliAvailable,
+  ClaudeCodeProvider,
+  AnthropicApiProvider,
+} from "./screen-providers.js";
+export type { ModelProvider, ModelCallResult } from "./screen-providers.js";
 export type {
   McpServerInput,
   ExtractedTool,
@@ -17,6 +27,10 @@ export type {
   AccountabilityGapPattern,
   CodingIndicators,
   IndicatorValue,
+  Domain5Indicator,
+  ScreeningLikelihood,
+  ScreeningSignal,
+  ScreeningMetadata,
   DiscoveredServer,
   CandidateFile,
   DiscoveryFilters,

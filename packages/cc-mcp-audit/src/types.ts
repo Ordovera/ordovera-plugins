@@ -132,6 +132,14 @@ export interface ServerReport {
   };
   /** Three-valued coding indicators (Present / Absent / Indeterminate) */
   indicators: CodingIndicators;
+  /**
+   * Optional LLM-generated triage hints for Domain 5 indicators.
+   * Present only when --llm-screen was enabled. These are hints for the human
+   * reviewer, never coded values -- coding values live in `indicators`.
+   */
+  screeningSignals?: Partial<Record<Domain5Indicator, ScreeningSignal>>;
+  /** Optional screening run metadata (model, tokens, cost) */
+  screeningMetadata?: ScreeningMetadata;
   /** Named accountability gap patterns detected */
   accountabilityGaps: AccountabilityGap[];
   /** Errors or warnings during extraction */
@@ -161,6 +169,33 @@ export interface CodingIndicators {
   rateLimiting: IndicatorValue;
   /** Sensitive capability isolation via file or namespace structure */
   sensitiveCapabilityIsolation: IndicatorValue;
+  /** Domain 5: coded by human review. Null until populated. */
+  selfModificationPrevention: IndicatorValue | null;
+  /** Domain 5: coded by human review. Null until populated. */
+  subAgentAuthorityConstraints: IndicatorValue | null;
+  /** Domain 5: coded by human review. Null until populated. */
+  permissionBoundaryEnforcement: IndicatorValue | null;
+}
+
+export type Domain5Indicator =
+  | "selfModificationPrevention"
+  | "subAgentAuthorityConstraints"
+  | "permissionBoundaryEnforcement";
+
+export type ScreeningLikelihood = "likely-present" | "likely-absent" | "unclear";
+
+export interface ScreeningSignal {
+  likelihood: ScreeningLikelihood;
+  notes: string;
+  citations: Array<{ file: string; line: number }>;
+}
+
+export interface ScreeningMetadata {
+  model: string;
+  promptVersion: string;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  indicatorsScreened: Domain5Indicator[];
 }
 
 export interface AuditReport {

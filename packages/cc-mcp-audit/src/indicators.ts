@@ -31,6 +31,12 @@ export function deriveIndicators(report: ServerReport): CodingIndicators {
       report,
       extractionIncomplete
     ),
+    // Domain 5 indicators are always null -- populated by human review outside
+    // the tool. The LLM screening pass (--llm-screen) does not set these; it
+    // writes to screeningSignals instead.
+    selfModificationPrevention: null,
+    subAgentAuthorityConstraints: null,
+    permissionBoundaryEnforcement: null,
   };
 }
 
