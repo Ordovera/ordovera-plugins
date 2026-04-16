@@ -174,6 +174,42 @@ describe("deriveIndicators", () => {
     });
   });
 
+  describe("Domain 5 indicators", () => {
+    it("returns null for all three Domain 5 indicators regardless of input", () => {
+      const r = makeReport({
+        flags: { ...makeReport().flags, hasAuth: true, hasLogging: true },
+      });
+      const indicators = deriveIndicators(r);
+      expect(indicators.selfModificationPrevention).toBeNull();
+      expect(indicators.subAgentAuthorityConstraints).toBeNull();
+      expect(indicators.permissionBoundaryEnforcement).toBeNull();
+    });
+
+    it("Domain 5 null slots persist even when extraction is rich", () => {
+      const r = makeReport({
+        tools: [
+          makeTool({ name: "read_a", classification: "read" }),
+          makeTool({ name: "write_a", classification: "write" }),
+        ],
+        flags: {
+          ...makeReport().flags,
+          hasAuth: true,
+          hasPerToolAuth: true,
+          hasLogging: true,
+          hasAttributedLogging: true,
+          hasConfirmationGates: true,
+          hasWriteTools: true,
+          hasRateLimiting: true,
+          hasLeastPrivilege: true,
+        },
+      });
+      const indicators = deriveIndicators(r);
+      expect(indicators.selfModificationPrevention).toBeNull();
+      expect(indicators.subAgentAuthorityConstraints).toBeNull();
+      expect(indicators.permissionBoundaryEnforcement).toBeNull();
+    });
+  });
+
   describe("stagedExecution", () => {
     it("Present when hasStagedExecution flag is set", () => {
       const r = makeReport({

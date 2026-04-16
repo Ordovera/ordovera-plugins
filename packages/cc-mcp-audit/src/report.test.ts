@@ -153,4 +153,86 @@ describe("formatMarkdown", () => {
 
     expect(md).not.toContain("### Warnings");
   });
+
+  it("includes Domain 5 indicator rows with placeholder text", () => {
+    const server = buildServerReport(
+      "test-server",
+      "/local",
+      "python",
+      makeTools(),
+      makePatterns(),
+      []
+    );
+    const report = buildAuditReport([server]);
+    const md = formatMarkdown(report);
+
+    expect(md).toContain("Self-modification prevention (Domain 5)");
+    expect(md).toContain("Sub-agent authority constraints (Domain 5)");
+    expect(md).toContain("Permission boundary enforcement (Domain 5)");
+    expect(md).toContain("(human review required)");
+  });
+
+  it("includes screening hints section when screeningSignals present", () => {
+    const server = buildServerReport(
+      "screened-server",
+      "/local",
+      "python",
+      makeTools(),
+      makePatterns(),
+      []
+    );
+    server.screeningSignals = {
+      selfModificationPrevention: {
+        likelihood: "likely-absent",
+        notes: "tool mutation at admin.py:47",
+        citations: [{ file: "admin.py", line: 47 }],
+      },
+      subAgentAuthorityConstraints: {
+        likelihood: "unclear",
+        notes: "No spawning patterns detected",
+        citations: [],
+      },
+      permissionBoundaryEnforcement: {
+        likelihood: "likely-present",
+        notes: "check_scope() in handlers",
+        citations: [{ file: "handlers/data.py", line: 22 }],
+      },
+    };
+    server.screeningMetadata = {
+      model: "claude-haiku-4-5-20251001",
+      promptVersion: "v1",
+      totalTokens: 12345,
+      estimatedCostUsd: 0.015,
+      indicatorsScreened: [
+        "selfModificationPrevention",
+        "subAgentAuthorityConstraints",
+        "permissionBoundaryEnforcement",
+      ],
+    };
+
+    const report = buildAuditReport([server]);
+    const md = formatMarkdown(report);
+
+    expect(md).toContain("Human Review Required (Domain 5)");
+    expect(md).toContain("likely-absent");
+    expect(md).toContain("admin.py:47");
+    expect(md).toContain("claude-haiku-4-5-20251001");
+    expect(md).toContain("12345 tokens");
+    expect(md).toContain("$0.0150");
+  });
+
+  it("does not include screening hints section when screeningSignals absent", () => {
+    const server = buildServerReport(
+      "unscreened",
+      "/local",
+      "python",
+      makeTools(),
+      makePatterns(),
+      []
+    );
+    const report = buildAuditReport([server]);
+    const md = formatMarkdown(report);
+
+    expect(md).not.toContain("Human Review Required (Domain 5)");
+  });
 });
