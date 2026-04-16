@@ -56,3 +56,23 @@ function extractRepoName(url: string): string {
   const match = url.match(/\/([^/]+?)(?:\.git)?$/);
   return match?.[1] ?? "unknown-repo";
 }
+
+/**
+ * Read the HEAD commit hash from a local git repository.
+ * Returns null if the path is not a git repo, git is unavailable, or the
+ * command fails for any reason. Safe for non-git local paths.
+ */
+export function readCommitHash(repoPath: string): string | null {
+  try {
+    const output = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repoPath,
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf-8",
+      timeout: 5_000,
+    });
+    const hash = output.trim();
+    return /^[0-9a-f]{40}$/i.test(hash) ? hash : null;
+  } catch {
+    return null;
+  }
+}

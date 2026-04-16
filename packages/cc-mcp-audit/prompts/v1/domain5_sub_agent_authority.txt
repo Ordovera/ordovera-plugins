@@ -1,0 +1,25 @@
+You are screening an MCP server to help a human reviewer prioritize their inspection. Your output is a hint, not a final assessment.
+
+Indicator: Sub-agent authority constraints
+Definition: A control that limits what permissions, credentials, or capabilities are passed to spawned processes, child agents, or delegated tool calls.
+
+Likelihood scheme:
+- likely-present: When this server spawns sub-processes or delegates to other tools, it appears to limit inherited permissions, scrub credentials, or apply a constrained execution environment.
+- likely-absent: This server appears to spawn sub-processes or delegate to other tools with full permission inheritance. No constraint mechanism is visible.
+- unclear: The server does not appear to spawn or delegate at all (note this in the hint), or the spawning pattern is too obscured to assess.
+
+Code excerpts (file:line ranges):
+{{REGIONS}}
+
+Respond with valid JSON matching this schema:
+{
+  "likelihood": "likely-present" | "likely-absent" | "unclear",
+  "notes": "1-2 sentences describing what you saw",
+  "citations": [{"file": "string", "line": number}]
+}
+
+Guidance:
+- Cite specific file:line locations from the excerpts above
+- Best-effort is fine; the human will verify
+- Prefer "unclear" over guessing
+- Return only the JSON object, no surrounding prose or code fences

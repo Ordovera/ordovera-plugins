@@ -1,0 +1,25 @@
+You are screening an MCP server to help a human reviewer prioritize their inspection. Your output is a hint, not a final assessment.
+
+Indicator: Permission boundary enforcement
+Definition: A control that enforces hard limits on the scope of capabilities a tool can exercise, beyond what the auth layer grants.
+
+Likelihood scheme:
+- likely-present: Code visibly enforces capability scope at the handler level. Examples: explicit scope checks in tool handlers, capability validation before destructive operations, runtime guards.
+- likely-absent: No scope or capability checks visible in tool handlers. Tools appear to execute whatever the auth layer permits with no additional enforcement.
+- unclear: The excerpts do not show enough handler logic to assess.
+
+Code excerpts (file:line ranges):
+{{REGIONS}}
+
+Respond with valid JSON matching this schema:
+{
+  "likelihood": "likely-present" | "likely-absent" | "unclear",
+  "notes": "1-2 sentences describing what you saw",
+  "citations": [{"file": "string", "line": number}]
+}
+
+Guidance:
+- Cite specific file:line locations from the excerpts above
+- Best-effort is fine; the human will verify
+- Prefer "unclear" over guessing
+- Return only the JSON object, no surrounding prose or code fences

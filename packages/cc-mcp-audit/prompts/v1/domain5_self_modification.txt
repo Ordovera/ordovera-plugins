@@ -1,0 +1,25 @@
+You are screening an MCP server to help a human reviewer prioritize their inspection. Your output is a hint, not a final assessment.
+
+Indicator: Self-modification prevention
+Definition: A control that prevents tool definitions from being modified at runtime after server initialization.
+
+Likelihood scheme:
+- likely-present: Tool definitions appear immutable at runtime. Registration happens only at server initialization. No visible code path mutates the tool registry after init.
+- likely-absent: Code paths exist that appear to mutate the tool registry after initialization. Examples: handlers that register tools at request time, code that assigns to the tool dictionary outside init, endpoints that allow runtime tool definition changes.
+- unclear: The excerpts do not show enough of the registration lifecycle to assess.
+
+Code excerpts (file:line ranges):
+{{REGIONS}}
+
+Respond with valid JSON matching this schema:
+{
+  "likelihood": "likely-present" | "likely-absent" | "unclear",
+  "notes": "1-2 sentences describing what you saw",
+  "citations": [{"file": "string", "line": number}]
+}
+
+Guidance:
+- Cite specific file:line locations from the excerpts above
+- Best-effort is fine; the human will verify
+- Prefer "unclear" over guessing
+- Return only the JSON object, no surrounding prose or code fences

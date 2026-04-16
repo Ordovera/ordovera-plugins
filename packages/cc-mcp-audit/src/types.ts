@@ -99,6 +99,12 @@ export interface ServerReport {
   name: string;
   /** Source URL or path */
   source: string;
+  /**
+   * Git commit hash of the analyzed source, if available.
+   * Captured at analysis time from the cloned or local repo. Null when the
+   * source is not a git repository or the hash could not be read.
+   */
+  commitHash: string | null;
   /** Primary language detected */
   language: "typescript" | "python" | "javascript" | "unknown";
   /** Extracted tool definitions */

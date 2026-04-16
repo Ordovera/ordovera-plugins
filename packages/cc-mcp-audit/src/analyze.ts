@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ServerReport, AuditReport } from "./types.js";
 import type { McpServerInput } from "./types.js";
-import { resolveSource } from "./clone.js";
+import { resolveSource, readCommitHash } from "./clone.js";
 import { extractTools } from "./extract.js";
 import { refineClassifications } from "./classify.js";
 import {
@@ -59,6 +59,7 @@ function detectLanguage(
 export function analyzeServer(input: McpServerInput): ServerReport {
   const { localPath, repoName } = resolveSource(input.source);
   const name = input.name ?? repoName;
+  const commitHash = readCommitHash(localPath);
   const warnings: string[] = [];
 
   const language = detectLanguage(localPath);
@@ -98,7 +99,8 @@ export function analyzeServer(input: McpServerInput): ServerReport {
     language,
     tools,
     patterns,
-    warnings
+    warnings,
+    commitHash
   );
 
   report.flags.hasPerToolAuth = authArch === "per-tool";

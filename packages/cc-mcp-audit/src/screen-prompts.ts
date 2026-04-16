@@ -1,83 +1,50 @@
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Domain5Indicator } from "./types.js";
 
 export const PROMPT_VERSION = "v1";
 
-interface PromptDefinition {
-  indicatorName: string;
-  definition: string;
-  likelyPresent: string;
-  likelyAbsent: string;
-  unclear: string;
-}
-
-const PROMPTS: Record<Domain5Indicator, PromptDefinition> = {
-  selfModificationPrevention: {
-    indicatorName: "Self-modification prevention",
-    definition:
-      "A control that prevents tool definitions from being modified at runtime after server initialization.",
-    likelyPresent:
-      "Tool definitions appear immutable at runtime. Registration happens only at server initialization. No visible code path mutates the tool registry after init.",
-    likelyAbsent:
-      "Code paths exist that appear to mutate the tool registry after initialization. Examples: handlers that register tools at request time, code that assigns to the tool dictionary outside init, endpoints that allow runtime tool definition changes.",
-    unclear:
-      "The excerpts do not show enough of the registration lifecycle to assess.",
-  },
-  subAgentAuthorityConstraints: {
-    indicatorName: "Sub-agent authority constraints",
-    definition:
-      "A control that limits what permissions, credentials, or capabilities are passed to spawned processes, child agents, or delegated tool calls.",
-    likelyPresent:
-      "When this server spawns sub-processes or delegates to other tools, it appears to limit inherited permissions, scrub credentials, or apply a constrained execution environment.",
-    likelyAbsent:
-      "This server appears to spawn sub-processes or delegate to other tools with full permission inheritance. No constraint mechanism is visible.",
-    unclear:
-      "The server does not appear to spawn or delegate at all (note this in the hint), or the spawning pattern is too obscured to assess.",
-  },
-  permissionBoundaryEnforcement: {
-    indicatorName: "Permission boundary enforcement",
-    definition:
-      "A control that enforces hard limits on the scope of capabilities a tool can exercise, beyond what the auth layer grants.",
-    likelyPresent:
-      "Code visibly enforces capability scope at the handler level. Examples: explicit scope checks in tool handlers, capability validation before destructive operations, runtime guards.",
-    likelyAbsent:
-      "No scope or capability checks visible in tool handlers. Tools appear to execute whatever the auth layer permits with no additional enforcement.",
-    unclear:
-      "The excerpts do not show enough handler logic to assess.",
-  },
+const PROMPT_FILES: Record<Domain5Indicator, string> = {
+  selfModificationPrevention: "domain5_self_modification.txt",
+  subAgentAuthorityConstraints: "domain5_sub_agent_authority.txt",
+  permissionBoundaryEnforcement: "domain5_permission_boundary.txt",
 };
 
 /**
+ * Resolve the prompts directory relative to this module's runtime location.
+ * At build time, src/ compiles to dist/; the prompts live at package root in
+ * prompts/<version>/. Walk up from dist/ (or src/ in tests) to package root.
+ */
+function promptsDir(version: string): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // From dist/ -> package root; from src/ -> package root. Either way, "..".
+  return resolve(here, "..", "prompts", version);
+}
+
+// Cache loaded prompts so each indicator's template is read only once
+const TEMPLATE_CACHE: Partial<Record<Domain5Indicator, string>> = {};
+
+function loadTemplate(indicator: Domain5Indicator): string {
+  const cached = TEMPLATE_CACHE[indicator];
+  if (cached != null) return cached;
+
+  const filename = PROMPT_FILES[indicator];
+  const path = join(promptsDir(PROMPT_VERSION), filename);
+  const content = readFileSync(path, "utf-8");
+  TEMPLATE_CACHE[indicator] = content;
+  return content;
+}
+
+/**
  * Build a prompt string for the given Domain 5 indicator and extracted code regions.
+ * Loads the versioned template from `prompts/<PROMPT_VERSION>/` and substitutes
+ * the `{{REGIONS}}` placeholder.
  */
 export function buildPrompt(
   indicator: Domain5Indicator,
   regionsText: string
 ): string {
-  const p = PROMPTS[indicator];
-
-  return `You are screening an MCP server to help a human reviewer prioritize their inspection. Your output is a hint, not a final assessment.
-
-Indicator: ${p.indicatorName}
-Definition: ${p.definition}
-
-Likelihood scheme:
-- likely-present: ${p.likelyPresent}
-- likely-absent: ${p.likelyAbsent}
-- unclear: ${p.unclear}
-
-Code excerpts (file:line ranges):
-${regionsText}
-
-Respond with valid JSON matching this schema:
-{
-  "likelihood": "likely-present" | "likely-absent" | "unclear",
-  "notes": "1-2 sentences describing what you saw",
-  "citations": [{"file": "string", "line": number}]
-}
-
-Guidance:
-- Cite specific file:line locations from the excerpts above
-- Best-effort is fine; the human will verify
-- Prefer "unclear" over guessing
-- Return only the JSON object, no surrounding prose or code fences`;
+  const template = loadTemplate(indicator);
+  return template.replace("{{REGIONS}}", regionsText);
 }

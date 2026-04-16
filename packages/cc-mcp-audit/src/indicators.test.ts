@@ -6,6 +6,7 @@ function makeReport(overrides: Partial<ServerReport> = {}): ServerReport {
   return {
     name: "test",
     source: "/test",
+    commitHash: null,
     language: "python",
     tools: [],
     sensitiveToolCount: 0,

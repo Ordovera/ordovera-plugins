@@ -14,7 +14,8 @@ export function buildServerReport(
   language: ServerReport["language"],
   tools: ExtractedTool[],
   patterns: PatternResults,
-  warnings: string[]
+  warnings: string[],
+  commitHash: string | null = null
 ): ServerReport {
   const sensitiveToolCount = tools.filter(
     (t) => t.classification === "write"
@@ -23,6 +24,7 @@ export function buildServerReport(
   return {
     name,
     source,
+    commitHash,
     language,
     tools,
     sensitiveToolCount,
@@ -190,6 +192,9 @@ function formatServerSection(server: ServerReport): string[] {
   lines.push("");
   lines.push(`Source: ${server.source}`);
   lines.push(`Language: ${server.language}`);
+  if (server.commitHash) {
+    lines.push(`Commit: ${server.commitHash.slice(0, 12)}`);
+  }
   lines.push("");
 
   // Tool inventory table

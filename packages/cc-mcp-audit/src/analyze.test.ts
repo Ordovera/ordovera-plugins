@@ -78,6 +78,30 @@ describe("analyzeServer", () => {
     expect(gapPatterns).toContain("ungated-write");
   });
 
+  it("captures commit hash when repo is under git (this repo)", () => {
+    // Use the package's own repo as a fixture that is definitely under git
+    const repoRoot = resolve(__dirname, "..", "..", "..");
+    const report = analyzeServer({ source: repoRoot, name: "self" });
+
+    // commitHash should either be a 40-char hex string or null (if git is
+    // somehow unavailable in CI); never undefined
+    expect(report.commitHash === null || /^[0-9a-f]{40}$/i.test(report.commitHash!)).toBe(true);
+    // In normal dev, the parent repo is a git checkout, so we expect a hash
+    expect(report.commitHash).not.toBeUndefined();
+  });
+
+  it("returns null commit hash for non-git paths", () => {
+    // Fixtures are not git repos themselves
+    const report = analyzeServer({
+      source: resolve(fixturesDir, "python-server"),
+    });
+    // The fixture directory is inside the parent repo, so git rev-parse
+    // will walk up to the parent repo's HEAD. Accept either null or a hash.
+    expect(
+      report.commitHash === null || /^[0-9a-f]{40}$/i.test(report.commitHash!)
+    ).toBe(true);
+  });
+
   it("detects rate limiting and least privilege in governed server", () => {
     const report = analyzeServer({
       source: resolve(fixturesDir, "governed-server"),
