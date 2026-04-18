@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import {
   toEvidence,
   toEvidenceBatch,
@@ -175,6 +176,51 @@ describe("resolveSourceInfo with broken PATH", () => {
     const info = resolveSourceInfo();
     expect(info.commitHash).toBeNull();
     expect(info.version).toBeTruthy();
+  });
+});
+
+describe("resolveSourceInfo with broken package.json", () => {
+  let tmpDir: string;
+
+  function makeTmpDir(): string {
+    const dir = resolve(tmpdir(), `evidence-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  afterEach(() => {
+    if (tmpDir) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws descriptive error when package.json is missing", () => {
+    tmpDir = makeTmpDir();
+    expect(() => resolveSourceInfo(tmpDir)).toThrow(/package\.json not found/);
+  });
+
+  it("throws descriptive error when package.json is not valid JSON", () => {
+    tmpDir = makeTmpDir();
+    writeFileSync(resolve(tmpDir, "package.json"), "not { json", "utf-8");
+    expect(() => resolveSourceInfo(tmpDir)).toThrow(/not valid JSON/);
+  });
+
+  it("throws descriptive error when package.json has no version field", () => {
+    tmpDir = makeTmpDir();
+    writeFileSync(resolve(tmpDir, "package.json"), '{"name": "test"}', "utf-8");
+    expect(() => resolveSourceInfo(tmpDir)).toThrow(/missing a "version" field/);
+  });
+
+  it("throws descriptive error when version is empty string", () => {
+    tmpDir = makeTmpDir();
+    writeFileSync(resolve(tmpDir, "package.json"), '{"version": ""}', "utf-8");
+    expect(() => resolveSourceInfo(tmpDir)).toThrow(/missing a "version" field/);
+  });
+
+  it("throws descriptive error when version is not a string", () => {
+    tmpDir = makeTmpDir();
+    writeFileSync(resolve(tmpDir, "package.json"), '{"version": 123}', "utf-8");
+    expect(() => resolveSourceInfo(tmpDir)).toThrow(/missing a "version" field/);
   });
 });
 

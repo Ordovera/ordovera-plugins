@@ -16,13 +16,19 @@ let _cachedSource: EvidenceSourceInfo | null = null;
 
 /**
  * Resolve the tool's own source info (version from package.json, commit hash
- * from git). Result is cached for the process lifetime. Throws with a
- * descriptive message if package.json is unreadable or missing a version field.
+ * from git). Result is cached for the process lifetime when called with the
+ * default pkgDir. Throws with a descriptive message if package.json is
+ * unreadable or missing a version field.
+ *
+ * Pass `pkgDir` to override the directory used to locate package.json and
+ * run git (useful in tests). Calls with a custom pkgDir bypass the cache.
  */
-export function resolveSourceInfo(): EvidenceSourceInfo {
-  if (_cachedSource) return _cachedSource;
+export function resolveSourceInfo(pkgDir?: string): EvidenceSourceInfo {
+  const useDefault = pkgDir === undefined;
+  if (useDefault && _cachedSource) return _cachedSource;
 
-  const pkgPath = resolve(__dirname, "..", "package.json");
+  const dir = pkgDir ?? resolve(__dirname, "..");
+  const pkgPath = resolve(dir, "package.json");
   let version: string;
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
@@ -45,7 +51,7 @@ export function resolveSourceInfo(): EvidenceSourceInfo {
   let commitHash: string | null = null;
   try {
     commitHash = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: resolve(__dirname, ".."),
+      cwd: dir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
@@ -53,8 +59,9 @@ export function resolveSourceInfo(): EvidenceSourceInfo {
     commitHash = null;
   }
 
-  _cachedSource = { tool: "cc-mcp-audit", version, commitHash };
-  return _cachedSource;
+  const result: EvidenceSourceInfo = { tool: "cc-mcp-audit", version, commitHash };
+  if (useDefault) _cachedSource = result;
+  return result;
 }
 
 /**
