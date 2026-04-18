@@ -8,6 +8,7 @@ export { detectGaps } from "./gaps.js";
 export { deriveIndicators } from "./indicators.js";
 export { discover, parseCuratedList, extractGitHubUrls } from "./discover.js";
 export { screenServer } from "./screen.js";
+export { toEvidence, toEvidenceBatch, resolveSourceInfo } from "./evidence.js";
 export { extractRegions, formatRegions } from "./screen-regions.js";
 export { buildPrompt, PROMPT_VERSION } from "./screen-prompts.js";
 export {
@@ -34,4 +35,7 @@ export type {
   DiscoveredServer,
   CandidateFile,
   DiscoveryFilters,
+  EvidenceEnvelope,
+  EvidenceBatch,
+  EvidenceSourceInfo,
 } from "./types.js";

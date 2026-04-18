@@ -10,6 +10,7 @@ import { discover } from "./discover.js";
 import { resolveSource } from "./clone.js";
 import { screenServer } from "./screen.js";
 import { selectProvider } from "./screen-providers.js";
+import { toEvidence, toEvidenceBatch } from "./evidence.js";
 
 const subcommand = process.argv[2];
 
@@ -127,7 +128,7 @@ Usage:
 
 Options:
   -o, --output <file>       Write report to file (default: stdout)
-  -f, --format <fmt>        Output format: json | markdown (default: json)
+  -f, --format <fmt>        Output format: json | markdown | evidence (default: json)
   -c, --candidates <file>   JSON file with array of {source, name?} entries
   --llm-screen              Enable LLM triage hints for Domain 5 indicators
   --llm-provider <id>       claude-code | anthropic-api | auto (default: auto)
@@ -216,28 +217,36 @@ Examples:
     schemaVersion: "0.1.0" as const,
   };
 
-  const output =
-    values.format === "markdown"
-      ? formatMarkdown(
-          "servers" in report
-            ? report
-            : {
-                generatedAt: new Date().toISOString(),
-                schemaVersion: "0.1.0",
-                servers: [report as any],
-                summary: {
-                  totalServers: 1,
-                  totalTools: (report as any).tools?.length ?? 0,
-                  totalSensitiveTools: (report as any).sensitiveToolCount ?? 0,
-                  serversWithAuth: (report as any).flags?.hasAuth ? 1 : 0,
-                  serversWithLogging: (report as any).flags?.hasLogging ? 1 : 0,
-                  serversWithGates: (report as any).flags?.hasConfirmationGates
-                    ? 1
-                    : 0,
-                },
-              }
-        )
-      : JSON.stringify(report, null, 2);
+  let output: string;
+  if (values.format === "evidence") {
+    if (multiReport) {
+      output = JSON.stringify(toEvidenceBatch(multiReport), null, 2);
+    } else {
+      output = JSON.stringify(toEvidence(singleReport!), null, 2);
+    }
+  } else if (values.format === "markdown") {
+    output = formatMarkdown(
+      "servers" in report
+        ? report
+        : {
+            generatedAt: new Date().toISOString(),
+            schemaVersion: "0.1.0",
+            servers: [report as any],
+            summary: {
+              totalServers: 1,
+              totalTools: (report as any).tools?.length ?? 0,
+              totalSensitiveTools: (report as any).sensitiveToolCount ?? 0,
+              serversWithAuth: (report as any).flags?.hasAuth ? 1 : 0,
+              serversWithLogging: (report as any).flags?.hasLogging ? 1 : 0,
+              serversWithGates: (report as any).flags?.hasConfirmationGates
+                ? 1
+                : 0,
+            },
+          }
+    );
+  } else {
+    output = JSON.stringify(report, null, 2);
+  }
 
   if (values.output) {
     writeFileSync(resolve(values.output), output, "utf-8");

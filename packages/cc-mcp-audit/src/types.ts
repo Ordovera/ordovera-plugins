@@ -94,6 +94,12 @@ export interface AccountabilityGap {
   reviewNote: string;
 }
 
+export interface EvidenceSourceInfo {
+  tool: "cc-mcp-audit";
+  version: string;
+  commitHash: string | null;
+}
+
 export interface ServerReport {
   /** Server name (derived from repo or provided) */
   name: string;
@@ -202,6 +208,45 @@ export interface ScreeningMetadata {
   totalTokens: number;
   estimatedCostUsd: number;
   indicatorsScreened: Domain5Indicator[];
+}
+
+export interface EvidenceEnvelope {
+  /** Evidence format version */
+  evidenceVersion: "0.1.0";
+  /** Evidence source identifier */
+  source: EvidenceSourceInfo;
+  /** When this Evidence was produced */
+  timestamp: string;
+  /** The MCP server being assessed (XACML subject) */
+  subject: {
+    name: string;
+    source: string;
+    commitHash: string | null;
+    language: string;
+  };
+  /** Governance-posture attributes (XACML resource attributes) */
+  attributes: {
+    indicators: CodingIndicators;
+    gaps: AccountabilityGap[];
+    flags: ServerReport["flags"];
+    toolSummary: {
+      total: number;
+      read: number;
+      write: number;
+      unknown: number;
+      sensitive: number;
+    };
+  };
+  /** Full ServerReport for deep inspection (audit trail) */
+  fullReport: ServerReport;
+}
+
+export interface EvidenceBatch {
+  evidenceVersion: "0.1.0";
+  generatedAt: string;
+  source: EvidenceEnvelope["source"];
+  envelopes: EvidenceEnvelope[];
+  summary: AuditReport["summary"];
 }
 
 export interface AuditReport {
