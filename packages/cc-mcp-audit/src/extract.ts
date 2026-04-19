@@ -3,14 +3,23 @@ import { join, extname, relative } from "node:path";
 import type { ExtractedTool } from "./types.js";
 
 const WRITE_KEYWORDS = [
+  // CRUD / API
   "create", "insert", "update", "delete", "drop", "alter", "execute",
   "send", "write", "modify", "remove", "destroy", "post", "put", "patch",
   "publish", "deploy", "push", "upload", "mutate", "truncate",
+  // Infrastructure / server management
+  "restart", "reboot", "harden", "lock", "fix", "restore", "configure",
+  "set", "schedule", "install", "apply", "provision", "enable", "disable",
+  "start", "stop", "add", "import", "migrate", "prune", "purge",
 ];
 
 const READ_KEYWORDS = [
+  // CRUD / API
   "get", "list", "read", "fetch", "query", "search", "find", "select",
   "describe", "show", "view", "check", "inspect", "count", "status",
+  // Infrastructure / observability
+  "audit", "scan", "diagnose", "score", "monitor", "overview", "export",
+  "watch", "health", "verify", "analyze", "collect", "log",
 ];
 
 /**
@@ -37,8 +46,9 @@ export function extractTools(repoPath: string): ExtractedTool[] {
 
 /**
  * Extract tools from Python source using common MCP patterns:
- * - @server.tool() / @app.tool() decorators
+ * - @server.tool() / @app.tool() / @mcp.tool() decorators (single and multi-line)
  * - server.tool(name=...) / Tool(...) registrations
+ * - mcp.add_tool(func, ...) dynamic registration (FastMCP)
  */
 function extractPythonTools(content: string, file: string): ExtractedTool[] {
   const tools: ExtractedTool[] = [];
@@ -47,7 +57,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Decorator pattern: @server.tool() or @app.tool("name")
+    // Decorator pattern: @server.tool("name") or @mcp.tool(name="name")
     const decoratorMatch = line.match(
       /@\w+\.tool\(\s*(?:name\s*=\s*)?["']([^"']+)["']/
     );
@@ -59,7 +69,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       continue;
     }
 
-    // Bare decorator: @server.tool() with function name
+    // Bare decorator: @server.tool() with function name on next line
     const bareDecoratorMatch = line.match(/@\w+\.tool\(\s*\)/);
     if (bareDecoratorMatch) {
       const funcMatch = lines[i + 1]?.match(
@@ -72,6 +82,68 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
         );
       }
       continue;
+    }
+
+    // Multi-line decorator: @mcp.tool(\n  description="...",\n  ...\n)
+    const multiLineDecoratorMatch = line.match(/@(\w+)\.tool\(\s*$/);
+    if (multiLineDecoratorMatch) {
+      const { closingLine, body } = scanToClosingParen(lines, i);
+      if (closingLine >= 0) {
+        const nameFromDecorator = extractKwarg(body, "name");
+        const descFromDecorator = extractKwarg(body, "description");
+        // Find the def line after the closing paren
+        let defLine = -1;
+        let funcName: string | undefined;
+        for (let j = closingLine + 1; j < Math.min(closingLine + 3, lines.length); j++) {
+          const defMatch = lines[j]?.match(/(?:async\s+)?def\s+(\w+)/);
+          if (defMatch) {
+            funcName = defMatch[1];
+            defLine = j;
+            break;
+          }
+        }
+        if (funcName) {
+          const name = nameFromDecorator ?? funcName;
+          const description = descFromDecorator
+            ?? extractPythonDocstring(lines, defLine + 1);
+          tools.push(buildTool(name, description, file, i + 1));
+          i = defLine; // skip past the def line
+        }
+      }
+      continue;
+    }
+
+    // Dynamic registration: mcp.add_tool(func_ref, description="...")
+    const addToolMatch = line.match(/(\w+)\.add_tool\(\s*$/);
+    if (addToolMatch) {
+      const { closingLine, body } = scanToClosingParen(lines, i);
+      if (closingLine >= 0) {
+        const funcRef = body.match(/^\s*(\w+)\s*,/)?.[1];
+        const descFromCall = extractKwarg(body, "description");
+        if (funcRef) {
+          tools.push(
+            buildTool(funcRef, descFromCall ?? "", file, i + 1)
+          );
+          i = closingLine;
+        }
+      }
+      continue;
+    }
+    // Single-line add_tool: mcp.add_tool(func_ref, description="...")
+    // Only match when description= is present (distinguishes from dynamic
+    // loop registration like `app.add_tool(name, fn)`)
+    const addToolInlineMatch = line.match(
+      /\w+\.add_tool\(\s*(\w+)\s*,/
+    );
+    if (addToolInlineMatch && !line.match(/@/)) {
+      const window = lines.slice(i, Math.min(i + 5, lines.length)).join(" ");
+      if (window.match(/description\s*=/)) {
+        const description = extractInlineDescription(lines, i);
+        tools.push(
+          buildTool(addToolInlineMatch[1], description, file, i + 1)
+        );
+        continue;
+      }
     }
 
     // Registration pattern: server.tool("name", ...) or Tool(name="...")
@@ -97,6 +169,43 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
   }
 
   return tools;
+}
+
+/**
+ * From a line containing an opening paren, scan forward to find the matching
+ * closing paren. Returns the line index of the closing paren and the
+ * concatenated body between them. Handles nested parens (e.g. ToolAnnotations()).
+ */
+function scanToClosingParen(
+  lines: string[],
+  startLine: number,
+  maxScan = 30
+): { closingLine: number; body: string } {
+  let depth = 0;
+  const bodyLines: string[] = [];
+  for (let j = startLine; j < Math.min(startLine + maxScan, lines.length); j++) {
+    const line = lines[j];
+    for (const ch of line) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+    }
+    if (j > startLine) bodyLines.push(line);
+    if (depth === 0) {
+      return { closingLine: j, body: bodyLines.join(" ") };
+    }
+  }
+  return { closingLine: -1, body: "" };
+}
+
+/**
+ * Extract a keyword argument value from a Python call body.
+ * Matches `key="value"` or `key='value'`.
+ */
+function extractKwarg(body: string, key: string): string | undefined {
+  const match = body.match(
+    new RegExp(`${key}\\s*=\\s*["']([^"']+)["']`)
+  );
+  return match?.[1];
 }
 
 /**

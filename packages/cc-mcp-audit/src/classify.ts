@@ -34,15 +34,16 @@ export function refineClassifications(
   return tools.map((tool) => {
     const refined = { ...tool };
 
-    // Downgrade "write" to "read" if description suggests safe context
+    // Downgrade "write" to "read" if the only write signal is "execute"
+    // and the description suggests a safe/read-only context
     if (
       tool.classification === "write" &&
+      tool.sensitiveKeywords.length === 1 &&
+      tool.sensitiveKeywords[0] === "execute" &&
       SAFE_EXECUTE_CONTEXTS.some((p) => p.test(tool.description))
     ) {
       refined.classification = "read";
-      refined.sensitiveKeywords = tool.sensitiveKeywords.filter(
-        (kw) => kw !== "execute"
-      );
+      refined.sensitiveKeywords = [];
     }
 
     // Upgrade "read" to "write" if description suggests dangerous context

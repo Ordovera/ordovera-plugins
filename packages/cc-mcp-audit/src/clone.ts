@@ -52,8 +52,9 @@ export function resolveSource(source: string, workDir?: string): CloneResult {
   return { localPath: targetDir, repoName, isTemp: !workDir };
 }
 
-function extractRepoName(url: string): string {
-  const match = url.match(/\/([^/]+?)(?:\.git)?$/);
+export function extractRepoName(url: string): string {
+  const cleaned = url.replace(/\/+$/, "");
+  const match = cleaned.match(/\/([^/]+?)(?:\.git)?$/);
   return match?.[1] ?? "unknown-repo";
 }
 

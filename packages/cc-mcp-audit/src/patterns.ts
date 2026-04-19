@@ -293,10 +293,14 @@ function findScanFiles(dir: string, depth = 0): string[] {
     "node_modules", ".git", "dist", "build", "__pycache__",
     ".venv", "venv", ".tox", ".mypy_cache",
   ]);
+  const skipFiles = new Set([
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+  ]);
 
   for (const entry of readdirSync(dir)) {
     if (entry.startsWith(".") && entry !== ".") continue;
     if (skipDirs.has(entry)) continue;
+    if (skipFiles.has(entry)) continue;
 
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath, { throwIfNoEntry: false });
