@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "0.1.0",
+  "description": "MCP servers validated during cc-mcp-audit development. Commit hashes pin the exact source analyzed; results are reproducible at these hashes.",
+  "generatedAt": "2026-04-21",
+  "servers": [
+    {
+      "name": "postgres-mcp",
+      "source": "https://github.com/crystaldba/postgres-mcp",
+      "commitHash": "07eb329c8c48e49640e0d1b5b35465d4d024c3ee",
+      "language": "python",
+      "notes": "FastMCP multi-line decorator pattern. First real-world extraction test. Drove the multi-line @mcp.tool() and mcp.add_tool() extractor fixes. 10 tools after fix (0 before)."
+    },
+    {
+      "name": "onchain-mcp",
+      "source": "https://github.com/Bankless/onchain-mcp",
+      "commitHash": "5a0f10947e717c7988c7e75c7edd92544985fdf4",
+      "language": "typescript",
+      "notes": "Read-only blockchain data server. Exposed trailing-slash name derivation bug (unknown-repo) and lockfile pattern scan false positives (package-lock.json rate-limit matches). Both fixed."
+    },
+    {
+      "name": "kastell",
+      "source": "https://github.com/kastelldev/kastell",
+      "commitHash": "5b7d15bb0d01f79abdf8145bc7ab12971f9f50c1",
+      "language": "typescript",
+      "notes": "Infrastructure management CLI with 46 tools. Drove keyword expansion (infrastructure/server management verbs) and refineClassifications fix (overbroad SAFE_EXECUTE_CONTEXTS downgrade). Unknown dropped from 20 to 5."
+    },
+    {
+      "name": "openclaw",
+      "source": "https://github.com/openclaw/openclaw",
+      "commitHash": "38aaa23e6317967dd44226b8717f698d5f69a872",
+      "language": "typescript",
+      "notes": "Largest tool surface tested (718 tools, 110 sensitive). 3 governance gaps including ungated-write and destructive-without-audit-trail."
+    },
+    {
+      "name": "markitdown",
+      "source": "https://github.com/microsoft/markitdown",
+      "commitHash": "a51f725d7ff4cdfe3bb6ad2ce2c04d98bf5f1f00",
+      "language": "python",
+      "notes": "Minimal server -- single read tool for file conversion. Clean posture baseline."
+    },
+    {
+      "name": "netdata",
+      "source": "https://github.com/netdata/netdata",
+      "commitHash": "79d43657a332daf9947c2f8dfa45a21b8656c5a4",
+      "language": "python",
+      "notes": "Not an MCP server. Listed in curated index but is a monitoring platform. Pattern scanner found governance patterns in the monitoring codebase. Corpus quality signal: not everything in curated lists is an MCP server."
+    },
+    {
+      "name": "context7",
+      "source": "https://github.com/upstash/context7",
+      "commitHash": "f056b14cde2a1b88e151c579c5093f64eaf929d6",
+      "language": "typescript",
+      "notes": "1 unknown tool extracted. auth-without-actor-logging gap."
+    },
+    {
+      "name": "mindsdb",
+      "source": "https://github.com/mindsdb/mindsdb",
+      "commitHash": "c99b275a1882b14d49255d6d04573cd21bab756d",
+      "language": "python",
+      "notes": "Cleanest governance posture in corpus: 8 Present indicators, 0 gaps. 2 read tools."
+    },
+    {
+      "name": "playwright-mcp",
+      "source": "https://github.com/microsoft/playwright-mcp",
+      "commitHash": "3f76bfafacbd5c21498127f0a2c801a0d8b0015f",
+      "language": "typescript",
+      "notes": "Monorepo wrapper pattern. Tools bundled in playwright-core, registered dynamically at runtime. 0 tools extracted; MCP framework detected. Drove the deep extraction work plan (Layer C: wrapper detection, Layer B: runtime extraction, Layer A: test coverage cross-check)."
+    }
+  ]
+}
