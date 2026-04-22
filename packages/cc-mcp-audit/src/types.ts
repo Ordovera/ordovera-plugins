@@ -9,6 +9,15 @@ export interface McpServerInput {
   name?: string;
 }
 
+export interface AnalyzeOptions {
+  /**
+   * When true and Layer C detects a wrapper, attempt runtime extraction:
+   * npm install --ignore-scripts in the clone, then introspect the upstream
+   * package for exported tool definitions.
+   */
+  deepExtract?: boolean;
+}
+
 export interface DiscoveredServer {
   /** GitHub clone URL */
   source: string;
@@ -94,6 +103,24 @@ export interface AccountabilityGap {
   reviewNote: string;
 }
 
+export interface TestToolCoverage {
+  /** Tool names asserted in test files */
+  names: string[];
+  /** File where the tool names were found */
+  sourceFile: string;
+  /** Cross-check between extraction and test assertions */
+  coverage: {
+    /** Tools found by extraction */
+    extractedCount: number;
+    /** Tool names asserted in tests */
+    assertedCount: number;
+    /** Tool names in tests but not found by extraction */
+    missingFromExtraction: string[];
+    /** Extracted tools not mentioned in tests */
+    missingFromTests: string[];
+  };
+}
+
 export interface EvidenceSourceInfo {
   tool: "cc-mcp-audit";
   version: string;
@@ -113,6 +140,12 @@ export interface ServerReport {
   commitHash: string | null;
   /** Primary language detected */
   language: "typescript" | "python" | "javascript" | "unknown";
+  /**
+   * Upstream package this server wraps, if detected.
+   * Present when the extractor finds 0 tools but identifies the repo as a
+   * thin wrapper around a dependency that likely contains the tool definitions.
+   */
+  upstreamPackage: string | null;
   /** Extracted tool definitions */
   tools: ExtractedTool[];
   /** Count of tools classified as sensitive (write) */
@@ -152,6 +185,11 @@ export interface ServerReport {
   screeningSignals?: Partial<Record<Domain5Indicator, ScreeningSignal>>;
   /** Optional screening run metadata (model, tokens, cost) */
   screeningMetadata?: ScreeningMetadata;
+  /**
+   * Test-file tool name cross-check. Present when test files contain tool name
+   * assertions, providing a governance signal about extraction completeness.
+   */
+  testToolCoverage?: TestToolCoverage[];
   /** Named accountability gap patterns detected */
   accountabilityGaps: AccountabilityGap[];
   /** Errors or warnings during extraction */

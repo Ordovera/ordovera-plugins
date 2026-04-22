@@ -8,6 +8,7 @@ function makeReport(overrides: Partial<ServerReport> = {}): ServerReport {
     source: "/test",
     commitHash: null,
     language: "python",
+    upstreamPackage: null,
     tools: [],
     sensitiveToolCount: 0,
     patterns: {

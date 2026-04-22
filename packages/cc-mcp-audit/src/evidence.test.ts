@@ -29,6 +29,7 @@ function makeServerReport(overrides: Partial<ServerReport> = {}): ServerReport {
     source: "https://github.com/example/test-server",
     commitHash: "abc123def456",
     language: "typescript",
+    upstreamPackage: null,
     tools: [
       {
         name: "list_items",

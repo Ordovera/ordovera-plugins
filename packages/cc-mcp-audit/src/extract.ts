@@ -1,5 +1,7 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, extname, relative } from "node:path";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, extname, relative, dirname } from "node:path";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { ExtractedTool } from "./types.js";
 
 const WRITE_KEYWORDS = [
@@ -341,6 +343,489 @@ function extractInlineDescription(
     /description\s*[=:]\s*["']([^"']+)["']/
   );
   return descMatch?.[1] ?? "";
+}
+
+/**
+ * Detect whether a repo is a thin wrapper around an upstream dependency.
+ * Returns the upstream package name if detected, null otherwise.
+ *
+ * Detection signals:
+ * - Entry point is small (<50 lines) and imports from a dependency
+ * - package.json dependencies include the imported package
+ * - Import path contains tool/mcp/server keywords suggesting MCP capability
+ */
+/**
+ * Known MCP framework packages -- these ARE the framework, not an upstream
+ * tool provider. Exclude them from wrapper detection results.
+ */
+const MCP_FRAMEWORK_PACKAGES = new Set([
+  "@modelcontextprotocol/sdk",
+  "mcp",
+  "fastmcp",
+  "@anthropic-ai/sdk",
+]);
+
+/**
+ * Known MCP Python framework packages.
+ */
+const MCP_FRAMEWORK_PYTHON_PACKAGES = new Set([
+  "mcp",
+  "fastmcp",
+]);
+
+export function detectUpstreamPackage(repoPath: string): string | null {
+  // Collect dependencies from all package.json files (handles monorepos)
+  const deps: Record<string, string> = {};
+  const pkgFiles = findPackageJsonFiles(repoPath);
+  for (const pkgFile of pkgFiles) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgFile, "utf-8"));
+      Object.assign(deps, pkg.dependencies, pkg.devDependencies);
+    } catch {
+      // Invalid JSON
+    }
+  }
+
+  // Check Python requirements for dependencies
+  const pythonDeps = new Set<string>();
+  for (const reqFile of ["requirements.txt", "setup.py", "pyproject.toml"]) {
+    const reqPath = join(repoPath, reqFile);
+    try {
+      const content = readFileSync(reqPath, "utf-8");
+      // Extract package names from requirements.txt lines or dependency arrays
+      for (const match of content.matchAll(/^\s*([a-zA-Z0-9_-]+)/gm)) {
+        pythonDeps.add(match[1].toLowerCase());
+      }
+    } catch {
+      // File doesn't exist
+    }
+  }
+
+  const sourceFiles = findSourceFiles(repoPath);
+
+  // Look for small entry points that re-export from a dependency.
+  // Skip test files and declaration files -- focus on actual source.
+  const candidates = sourceFiles.filter((f) => {
+    const base = f.split("/").pop() ?? "";
+    if (isTestFile(base)) return false;
+    if (base.endsWith(".d.ts")) return false;
+    return true;
+  });
+
+  for (const filePath of candidates) {
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").filter(l => l.trim().length > 0);
+
+    // Only consider small files as wrapper candidates
+    if (lines.length > 50) continue;
+
+    const ext = extname(filePath);
+
+    if (ext === ".py") {
+      // Python: from <pkg> import ... or import <pkg>
+      const pyImports = content.matchAll(
+        /(?:from\s+([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_.]*)?(?:\s+import|\s*$))|(?:import\s+([a-zA-Z0-9_]+))/g
+      );
+      for (const m of pyImports) {
+        const pkg = (m[1] ?? m[2]).toLowerCase();
+        if (MCP_FRAMEWORK_PYTHON_PACKAGES.has(pkg)) continue;
+        // Python treats - and _ as interchangeable in package names
+        const normalized = pkg.replace(/_/g, "-");
+        if ((pythonDeps.has(pkg) || pythonDeps.has(normalized)) && isMcpRelatedImport(content, pkg)) {
+          return pkg;
+        }
+      }
+    } else {
+      // JS/TS: import ... from "pkg/..." or require("pkg/...")
+      const jsImports = content.matchAll(
+        /(?:from\s+["']([^"'./][^"']*)["'])|(?:require\(["']([^"'./][^"']*)["']\))/g
+      );
+      for (const m of jsImports) {
+        const fullSpec = m[1] ?? m[2];
+        // Extract bare package name (handle scoped packages)
+        const pkg = fullSpec.startsWith("@")
+          ? fullSpec.split("/").slice(0, 2).join("/")
+          : fullSpec.split("/")[0];
+
+        if (MCP_FRAMEWORK_PACKAGES.has(pkg)) continue;
+        if (pkg in deps && isMcpRelatedImport(content, fullSpec)) {
+          return pkg;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Runtime tool extraction result from the subprocess script.
+ */
+interface RuntimeToolDef {
+  name: string;
+  description: string;
+  readOnly?: boolean;
+}
+
+/** Default timeout for npm install (60 seconds). */
+const NPM_INSTALL_TIMEOUT_MS = 60_000;
+/** Default timeout for the extraction script (10 seconds). */
+const EXTRACT_SCRIPT_TIMEOUT_MS = 10_000;
+
+/**
+ * Attempt runtime extraction of tool definitions from a wrapper repo.
+ *
+ * 1. Runs `npm install --ignore-scripts --production` if node_modules is missing
+ * 2. Executes scripts/runtime-extract.cjs in a subprocess
+ * 3. Parses JSON output into ExtractedTool[]
+ *
+ * Returns an empty array on any failure (graceful degradation).
+ */
+export function extractToolsRuntime(
+  repoPath: string,
+  upstreamPackage: string
+): { tools: ExtractedTool[]; runtimeWarnings: string[] } {
+  const warnings: string[] = [];
+
+  // Only works for JS/TS repos with a package.json
+  const pkgPath = join(repoPath, "package.json");
+  if (!existsSync(pkgPath)) {
+    warnings.push("Runtime extraction skipped: no package.json found.");
+    return { tools: [], runtimeWarnings: warnings };
+  }
+
+  // Step 1: npm install if needed
+  const nodeModulesPath = join(repoPath, "node_modules");
+  if (!existsSync(nodeModulesPath)) {
+    try {
+      execFileSync("npm", ["install", "--ignore-scripts", "--production"], {
+        cwd: repoPath,
+        timeout: NPM_INSTALL_TIMEOUT_MS,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Runtime extraction: npm install failed: ${msg}`);
+      return { tools: [], runtimeWarnings: warnings };
+    }
+  }
+
+  // Step 2: Run the extraction script
+  const scriptPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "scripts",
+    "runtime-extract.cjs"
+  );
+
+  let stdout: string;
+  try {
+    const result = execFileSync(
+      process.execPath,
+      [scriptPath, upstreamPackage, repoPath],
+      {
+        cwd: repoPath,
+        timeout: EXTRACT_SCRIPT_TIMEOUT_MS,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, NODE_PATH: nodeModulesPath },
+      }
+    );
+    stdout = result.toString("utf-8").trim();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Runtime extraction: script execution failed: ${msg}`);
+    return { tools: [], runtimeWarnings: warnings };
+  }
+
+  // Step 3: Parse output
+  const { tools, parseWarnings } = parseRuntimeOutput(stdout, upstreamPackage);
+  warnings.push(...parseWarnings);
+
+  if (tools.length > 0) {
+    warnings.push(
+      `Runtime extraction found ${tools.length} tool(s) from \`${upstreamPackage}\`.`
+    );
+  }
+
+  return { tools, runtimeWarnings: warnings };
+}
+
+/**
+ * Parse JSON output from the runtime extraction script into ExtractedTool[].
+ * Exported for unit testing.
+ */
+export function parseRuntimeOutput(
+  stdout: string,
+  upstreamPackage: string
+): { tools: ExtractedTool[]; parseWarnings: string[] } {
+  const warnings: string[] = [];
+
+  if (!stdout || stdout === "[]") {
+    return { tools: [], parseWarnings: warnings };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    warnings.push("Runtime extraction: could not parse script output as JSON.");
+    return { tools: [], parseWarnings: warnings };
+  }
+
+  if (!Array.isArray(parsed)) {
+    warnings.push("Runtime extraction: script output is not an array.");
+    return { tools: [], parseWarnings: warnings };
+  }
+
+  const tools: ExtractedTool[] = [];
+  for (const item of parsed) {
+    if (
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as RuntimeToolDef).name === "string"
+    ) {
+      const def = item as RuntimeToolDef;
+      tools.push(
+        buildTool(
+          def.name,
+          def.description ?? "",
+          `[runtime:${upstreamPackage}]`,
+          0
+        )
+      );
+    }
+  }
+
+  return { tools, parseWarnings: warnings };
+}
+
+/**
+ * Scan test files for arrays of string literals near assertion keywords.
+ * Returns discovered tool name sets grouped by source file.
+ *
+ * Detection patterns:
+ * - JS/TS: string arrays near expect/assert/toContain/toEqual
+ * - Python: string arrays near assert/assertEqual/assertIn
+ */
+export function extractTestToolNames(
+  repoPath: string
+): Array<{ names: string[]; sourceFile: string }> {
+  const results: Array<{ names: string[]; sourceFile: string }> = [];
+  const testFiles = findTestFiles(repoPath);
+
+  for (const filePath of testFiles) {
+    const content = readFileSync(filePath, "utf-8");
+    const relPath = relative(repoPath, filePath);
+    const names = extractToolNamesFromTestContent(content);
+
+    if (names.length > 0) {
+      results.push({ names, sourceFile: relPath });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Extract tool-like names from test file content.
+ * Looks for string literal arrays near assertion patterns, callTool invocations,
+ * and multi-line array expressions.
+ */
+function extractToolNamesFromTestContent(content: string): string[] {
+  const names = new Set<string>();
+  const lines = content.split("\n");
+
+  const assertionContext = /(?:expect|assert|toContain|toEqual|assertIn|assertEqual|assert_in|assert_equal)/;
+
+  // Pass 1: Find multi-line arrays near assertions.
+  // When a line has `[` without `]`, scan forward for the closing bracket.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Check if this line or nearby lines contain assertion keywords
+    const windowStart = Math.max(0, i - 3);
+    const windowEnd = Math.min(lines.length, i + 3);
+    const nearbyText = lines.slice(windowStart, windowEnd).join(" ");
+    if (!assertionContext.test(nearbyText)) continue;
+
+    // Check for array opening on this line
+    if (line.includes("[")) {
+      // Try to extract the full array body, handling multi-line spans
+      const arrayBody = extractArrayBody(lines, i);
+      if (arrayBody) {
+        const stringLiterals = arrayBody.matchAll(/["']([a-z][a-z0-9_-]+)["']/gi);
+        for (const lit of stringLiterals) {
+          const name = lit[1];
+          if (/^[a-z][a-z0-9_-]{2,}$/i.test(name) && isToolLikeName(name)) {
+            names.add(name);
+          }
+        }
+      }
+    }
+
+    // Pattern 2: Individual assertions like toContain("tool_name")
+    const singleMatches = line.matchAll(
+      /(?:toContain|assertIn|assert_in|includes)\s*\(\s*["']([a-z][a-z0-9_-]+)["']/gi
+    );
+    for (const m of singleMatches) {
+      if (isToolLikeName(m[1])) {
+        names.add(m[1]);
+      }
+    }
+
+    // Pattern 3: callTool({ name: 'tool_name' }) -- common MCP test pattern
+    const callToolMatches = line.matchAll(
+      /callTool\s*\(\s*\{[^}]*name\s*:\s*["']([a-z][a-z0-9_-]+)["']/gi
+    );
+    for (const m of callToolMatches) {
+      if (isToolLikeName(m[1])) {
+        names.add(m[1]);
+      }
+    }
+    // Multi-line callTool: name might be on the next line
+    if (/callTool\s*\(\s*\{/.test(line) && !/name\s*:/.test(line)) {
+      const nextLines = lines.slice(i, Math.min(i + 5, lines.length)).join(" ");
+      const nameMatch = nextLines.match(
+        /callTool\s*\(\s*\{[^}]*name\s*:\s*["']([a-z][a-z0-9_-]+)["']/i
+      );
+      if (nameMatch && isToolLikeName(nameMatch[1])) {
+        names.add(nameMatch[1]);
+      }
+    }
+  }
+
+  return [...names];
+}
+
+/**
+ * Extract the body of an array starting at the given line.
+ * Handles multi-line arrays by scanning forward for the closing bracket.
+ * Returns null if no complete array is found within 50 lines.
+ */
+function extractArrayBody(lines: string[], startLine: number): string | null {
+  let depth = 0;
+  const bodyLines: string[] = [];
+
+  for (let j = startLine; j < Math.min(startLine + 50, lines.length); j++) {
+    const line = lines[j];
+    bodyLines.push(line);
+
+    for (const ch of line) {
+      if (ch === "[") depth++;
+      if (ch === "]") depth--;
+    }
+
+    if (depth === 0 && bodyLines.length > 0) {
+      return bodyLines.join(" ");
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Heuristic: does a string look like a tool name rather than a generic test value?
+ * Tool names typically contain an action verb (get_, list_, create_, etc.) or
+ * use snake_case/kebab-case with a noun.
+ */
+function isToolLikeName(name: string): boolean {
+  // Must contain an underscore or hyphen (compound name) -- single words are too ambiguous
+  if (!/[_-]/.test(name)) return false;
+  // Verb prefixes followed by separator
+  const verbPrefixes = /^(get|list|create|delete|update|read|write|send|search|find|fetch|query|execute|deploy|check|remove|add|set|start|stop|install|browse|click|navigate|scroll|fill|select|type|press|drag|drop|upload|download|export|import|analyze|scan|monitor|audit|run|push|pull|publish|restore|configure|enable|disable|modify|destroy|truncate|insert|drop|alter|schedule|provision|prune|purge|restart|reboot|harden|lock|fix|verify|diagnose|score|describe|show|view|inspect|count|status|watch|health|collect|log|overview)[_-]/i;
+  // Noun prefixes (already include separator)
+  const nounPrefixes = /^(browser_|file_|db_|api_|user_|data_|system_|server_|test_)/i;
+  return verbPrefixes.test(name) || nounPrefixes.test(name);
+}
+
+/**
+ * Find test files in a repo.
+ */
+function findTestFiles(dir: string, depth = 0): string[] {
+  if (depth > 6) return [];
+  const files: string[] = [];
+  const skipDirs = new Set([
+    "node_modules", ".git", "dist", "build", "__pycache__",
+    ".venv", "venv", ".tox", ".mypy_cache",
+  ]);
+
+  try {
+    for (const entry of readdirSync(dir)) {
+      if (entry.startsWith(".") && entry !== ".") continue;
+      if (skipDirs.has(entry)) continue;
+
+      const fullPath = join(dir, entry);
+      const stat = statSync(fullPath, { throwIfNoEntry: false });
+      if (!stat) continue;
+
+      if (stat.isDirectory()) {
+        // Also recurse into __tests__ directories
+        files.push(...findTestFiles(fullPath, depth + 1));
+      } else if (isTestFile(entry)) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory not readable
+  }
+
+  return files;
+}
+
+function isTestFile(filename: string): boolean {
+  // JS/TS test files
+  if (/\.(test|spec)\.(ts|js|mjs)$/.test(filename)) return true;
+  // Python test files
+  if (/^test_.*\.py$/.test(filename) || /.*_test\.py$/.test(filename)) return true;
+  return false;
+}
+
+/**
+ * Heuristic: does the import context suggest MCP/tool capability?
+ * Checks if the imported path or surrounding code references tool/mcp/server keywords.
+ */
+function isMcpRelatedImport(fileContent: string, importSpec: string): boolean {
+  const mcpKeywords = /tool|mcp|server|bundle|core/i;
+  // Check the import specifier itself
+  if (mcpKeywords.test(importSpec)) return true;
+  // Check if the file references tool registration patterns
+  const registrationPatterns = /registerTool|register_tool|add_tool|\.tool\(|createConnection|listTools|getTools/;
+  if (registrationPatterns.test(fileContent)) return true;
+  return false;
+}
+
+/**
+ * Find all package.json files in a repo (root + nested workspaces).
+ * Skips node_modules, .git, etc.
+ */
+function findPackageJsonFiles(dir: string, depth = 0): string[] {
+  if (depth > 4) return [];
+  const files: string[] = [];
+  const skipDirs = new Set([
+    "node_modules", ".git", "dist", "build", "__pycache__",
+    ".venv", "venv",
+  ]);
+
+  try {
+    for (const entry of readdirSync(dir)) {
+      if (entry.startsWith(".") && entry !== ".") continue;
+      if (skipDirs.has(entry)) continue;
+
+      const fullPath = join(dir, entry);
+      const stat = statSync(fullPath, { throwIfNoEntry: false });
+      if (!stat) continue;
+
+      if (stat.isDirectory()) {
+        files.push(...findPackageJsonFiles(fullPath, depth + 1));
+      } else if (entry === "package.json") {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory not readable
+  }
+
+  return files;
 }
 
 function findSourceFiles(dir: string, depth = 0): string[] {

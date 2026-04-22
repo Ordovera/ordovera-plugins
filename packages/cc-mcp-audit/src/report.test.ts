@@ -221,6 +221,52 @@ describe("formatMarkdown", () => {
     expect(md).toContain("$0.0150");
   });
 
+  it("includes test tool coverage section when testToolCoverage present", () => {
+    const server = buildServerReport(
+      "covered-server",
+      "/local",
+      "python",
+      makeTools(),
+      makePatterns(),
+      []
+    );
+    server.testToolCoverage = [
+      {
+        names: ["list_items", "export_data"],
+        sourceFile: "test_tools.py",
+        coverage: {
+          extractedCount: 2,
+          assertedCount: 2,
+          missingFromExtraction: ["export_data"],
+          missingFromTests: ["delete_item"],
+        },
+      },
+    ];
+    const report = buildAuditReport([server]);
+    const md = formatMarkdown(report);
+
+    expect(md).toContain("### Test Tool Coverage");
+    expect(md).toContain("test_tools.py");
+    expect(md).toContain("Asserted: 2 | Extracted: 2");
+    expect(md).toContain("In tests but not extracted: export_data");
+    expect(md).toContain("Extracted but not in tests: delete_item");
+  });
+
+  it("does not include test tool coverage section when absent", () => {
+    const server = buildServerReport(
+      "no-tests",
+      "/local",
+      "python",
+      makeTools(),
+      makePatterns(),
+      []
+    );
+    const report = buildAuditReport([server]);
+    const md = formatMarkdown(report);
+
+    expect(md).not.toContain("### Test Tool Coverage");
+  });
+
   it("does not include screening hints section when screeningSignals absent", () => {
     const server = buildServerReport(
       "unscreened",

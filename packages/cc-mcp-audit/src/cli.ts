@@ -110,6 +110,7 @@ async function runAnalyze(): Promise<void> {
       output: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "json" },
       candidates: { type: "string", short: "c" },
+      "deep-extract": { type: "boolean", default: false },
       "llm-screen": { type: "boolean", default: false },
       "llm-provider": { type: "string", default: "auto" },
       "llm-model": { type: "string", default: "claude-haiku-4-5-20251001" },
@@ -130,6 +131,7 @@ Options:
   -o, --output <file>       Write report to file (default: stdout)
   -f, --format <fmt>        Output format: json | markdown | evidence (default: json)
   -c, --candidates <file>   JSON file with array of {source, name?} entries
+  --deep-extract            For wrapper repos: npm install + runtime introspection
   --llm-screen              Enable LLM triage hints for Domain 5 indicators
   --llm-provider <id>       claude-code | anthropic-api | auto (default: auto)
   --llm-model <id>          Model to use (default: claude-haiku-4-5-20251001)
@@ -169,8 +171,11 @@ Examples:
     inputs = positionals.map((source) => ({ source }));
   }
 
-  const singleReport = inputs.length === 1 ? buildSingleReport(inputs[0]) : null;
-  const multiReport = inputs.length > 1 ? analyzeServers(inputs) : null;
+  const analyzeOpts = {
+    deepExtract: values["deep-extract"] as boolean,
+  };
+  const singleReport = inputs.length === 1 ? buildSingleReport(inputs[0], analyzeOpts) : null;
+  const multiReport = inputs.length > 1 ? analyzeServers(inputs, analyzeOpts) : null;
 
   const serverReports: ServerReport[] = multiReport
     ? multiReport.servers
@@ -256,6 +261,9 @@ Examples:
   }
 }
 
-function buildSingleReport(input: McpServerInput) {
-  return analyzeServer(input);
+function buildSingleReport(
+  input: McpServerInput,
+  options: import("./types.js").AnalyzeOptions = {}
+) {
+  return analyzeServer(input, options);
 }

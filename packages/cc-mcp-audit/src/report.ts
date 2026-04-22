@@ -26,6 +26,7 @@ export function buildServerReport(
     source,
     commitHash,
     language,
+    upstreamPackage: null, // Set by caller after wrapper detection
     tools,
     sensitiveToolCount,
     patterns,
@@ -301,6 +302,27 @@ function formatServerSection(server: ServerReport): string[] {
       }
       lines.push("");
       lines.push(`Review: ${gap.reviewNote}`);
+      lines.push("");
+    }
+  }
+
+  // Test tool coverage cross-check
+  if (server.testToolCoverage && server.testToolCoverage.length > 0) {
+    lines.push("### Test Tool Coverage");
+    lines.push("");
+    for (const tc of server.testToolCoverage) {
+      lines.push(`Source: ${tc.sourceFile}`);
+      lines.push(`Asserted: ${tc.coverage.assertedCount} | Extracted: ${tc.coverage.extractedCount}`);
+      if (tc.coverage.missingFromExtraction.length > 0) {
+        lines.push(
+          `In tests but not extracted: ${tc.coverage.missingFromExtraction.join(", ")}`
+        );
+      }
+      if (tc.coverage.missingFromTests.length > 0) {
+        lines.push(
+          `Extracted but not in tests: ${tc.coverage.missingFromTests.join(", ")}`
+        );
+      }
       lines.push("");
     }
   }

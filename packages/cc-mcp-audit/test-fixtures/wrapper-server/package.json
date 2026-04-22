@@ -1,0 +1,9 @@
+{
+  "name": "wrapper-mcp-server",
+  "version": "1.0.0",
+  "description": "Thin wrapper around upstream-core MCP tools",
+  "main": "src/index.js",
+  "dependencies": {
+    "upstream-core": "^2.0.0"
+  }
+}
