@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import {
   extractTools,
   detectUpstreamPackage,
+  findUpstreamImportPaths,
   parseRuntimeOutput,
   extractToolsRuntime,
   extractTestToolNames,
@@ -203,6 +204,92 @@ describe("extractTools", () => {
   describe("wrapper server", () => {
     it("extracts no tools from a thin wrapper", () => {
       const tools = extractTools(resolve(fixturesDir, "wrapper-server"));
+      expect(tools).toEqual([]);
+    });
+  });
+
+  describe("object-style extraction guards", () => {
+    const tmpBase = join(tmpdir(), "cc-mcp-audit-test-objstyle");
+    const dirs: string[] = [];
+
+    function makeTempFixture(name: string, files: Record<string, string>): string {
+      const dir = join(tmpBase, name + "-" + Date.now());
+      mkdirSync(dir, { recursive: true });
+      dirs.push(dir);
+      for (const [path, content] of Object.entries(files)) {
+        const fullPath = join(dir, path);
+        mkdirSync(dirname(fullPath), { recursive: true });
+        writeFileSync(fullPath, content);
+      }
+      return dir;
+    }
+
+    afterEach(() => {
+      for (const d of dirs) {
+        rmSync(d, { recursive: true, force: true });
+      }
+      dirs.length = 0;
+    });
+
+    it("skips object-style {name, description} in test files", () => {
+      const dir = makeTempFixture("test-obj-skip", {
+        "src/tools.test.ts": [
+          "const toolDefs = [",
+          '  { name: "fake_tool", description: "Should not be extracted" },',
+          "];",
+          "expect(server.tools).toEqual(toolDefs);",
+        ].join("\n"),
+      });
+      const tools = extractTools(dir);
+      expect(tools.map((t) => t.name)).not.toContain("fake_tool");
+    });
+
+    it("still extracts .tool() calls from test files", () => {
+      const dir = makeTempFixture("test-dotool-keep", {
+        "src/server.test.ts": [
+          'server.tool("list_items", "List all items", handler);',
+        ].join("\n"),
+      });
+      const tools = extractTools(dir);
+      expect(tools.map((t) => t.name)).toContain("list_items");
+    });
+
+    it("excludes FastMCP constructor metadata", () => {
+      const dir = makeTempFixture("fastmcp-ctor", {
+        "src/index.ts": [
+          "const app = new FastMCP({",
+          '  name: "MyApp",',
+          '  description: "My application server",',
+          "});",
+        ].join("\n"),
+      });
+      const tools = extractTools(dir);
+      expect(tools.map((t) => t.name)).not.toContain("MyApp");
+    });
+
+    it("excludes createServer constructor metadata", () => {
+      const dir = makeTempFixture("createserver-ctor", {
+        "src/index.js": [
+          "const server = createServer({",
+          '  name: "TestServer",',
+          '  description: "A test server",',
+          "});",
+        ].join("\n"),
+      });
+      const tools = extractTools(dir);
+      expect(tools.map((t) => t.name)).not.toContain("TestServer");
+    });
+
+    it("rejects objects without tool registration context", () => {
+      const dir = makeTempFixture("no-context", {
+        "src/config.ts": [
+          "const config = {",
+          '  name: "my_setting",',
+          '  description: "A configuration value",',
+          "};",
+        ].join("\n"),
+      });
+      const tools = extractTools(dir);
       expect(tools).toEqual([]);
     });
   });
@@ -410,6 +497,64 @@ describe("detectUpstreamPackage", () => {
   });
 });
 
+describe("findUpstreamImportPaths", () => {
+  const tmpBase = join(tmpdir(), "cc-mcp-audit-test-importpaths");
+  const dirs: string[] = [];
+
+  function makeTempFixture(name: string, files: Record<string, string>): string {
+    const dir = join(tmpBase, name + "-" + Date.now());
+    mkdirSync(dir, { recursive: true });
+    dirs.push(dir);
+    for (const [path, content] of Object.entries(files)) {
+      const fullPath = join(dir, path);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, content);
+    }
+    return dir;
+  }
+
+  afterEach(() => {
+    for (const d of dirs) {
+      rmSync(d, { recursive: true, force: true });
+    }
+    dirs.length = 0;
+  });
+
+  it("finds sub-path import specifiers for the upstream package", () => {
+    const dir = makeTempFixture("import-paths", {
+      "src/index.js": [
+        'const { tools } = require("playwright-core/lib/coreBundle");',
+        "module.exports = { createConnection: tools.createConnection };",
+      ].join("\n"),
+    });
+    const paths = findUpstreamImportPaths(dir, "playwright-core");
+    expect(paths).toContain("playwright-core/lib/coreBundle");
+  });
+
+  it("returns empty when no sub-path imports exist", () => {
+    const dir = makeTempFixture("no-subpaths", {
+      "src/index.js": [
+        'const pkg = require("my-pkg");',
+        "module.exports = pkg;",
+      ].join("\n"),
+    });
+    const paths = findUpstreamImportPaths(dir, "my-pkg");
+    expect(paths).toEqual([]);
+  });
+
+  it("skips test files and .d.ts files", () => {
+    const dir = makeTempFixture("skip-test-dts", {
+      "src/index.js": 'const x = require("pkg/lib/a");',
+      "src/index.test.ts": 'import { y } from "pkg/lib/b";',
+      "src/types.d.ts": 'import { z } from "pkg/lib/c";',
+    });
+    const paths = findUpstreamImportPaths(dir, "pkg");
+    expect(paths).toContain("pkg/lib/a");
+    expect(paths).not.toContain("pkg/lib/b");
+    expect(paths).not.toContain("pkg/lib/c");
+  });
+});
+
 describe("parseRuntimeOutput", () => {
   it("parses valid tool array", () => {
     const json = JSON.stringify([
@@ -542,6 +687,28 @@ describe("extractToolsRuntime", () => {
     // Should return empty (package not actually installed) but not crash
     expect(tools).toEqual([]);
   });
+
+  it("extracts tools with schema.name nested pattern", () => {
+    const dir = makeTempFixture("schema-name", {
+      "package.json": JSON.stringify({ dependencies: { "mcp-tools": "1.0.0" } }),
+      "node_modules/mcp-tools/index.js": [
+        "module.exports = {",
+        "  tools: [",
+        '    { schema: { name: "browser_click", description: "Click element" }, handle: function() {} },',
+        '    { schema: { name: "browser_nav", description: "Navigate" }, handle: function() {} },',
+        "  ]",
+        "};",
+      ].join("\n"),
+      "node_modules/mcp-tools/package.json": JSON.stringify({
+        name: "mcp-tools",
+        main: "index.js",
+      }),
+    });
+
+    const { tools } = extractToolsRuntime(dir, "mcp-tools");
+    expect(tools.map((t) => t.name)).toContain("browser_click");
+    expect(tools.map((t) => t.name)).toContain("browser_nav");
+  });
 });
 
 describe("extractTestToolNames", () => {
@@ -656,6 +823,21 @@ describe("extractTestToolNames", () => {
       const allNames = results.flatMap((r) => r.names);
       expect(allNames).toContain("list_records");
       expect(allNames).toContain("update_record");
+    });
+
+    it("rejects compound names without tool-like prefixes", () => {
+      const dir = makeTempFixture("non-tool-compound", {
+        "test_misc.py": [
+          "def test_values():",
+          '    expected = ["my_config", "app_version", "color_theme"]',
+          "    assert expected == actual",
+        ].join("\n"),
+      });
+      const results = extractTestToolNames(dir);
+      const allNames = results.flatMap((r) => r.names);
+      expect(allNames).not.toContain("my_config");
+      expect(allNames).not.toContain("app_version");
+      expect(allNames).not.toContain("color_theme");
     });
 
     it("extracts from multi-line arrays spanning 20+ lines", () => {
