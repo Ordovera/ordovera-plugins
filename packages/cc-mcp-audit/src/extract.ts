@@ -274,30 +274,32 @@ function extractTypeScriptTools(
     }
 
     // Object-style: { name: "toolName", description: "..." }
-    // Only match when near a tool registration context to avoid false positives
-    // from server metadata, CLI descriptors, UI definitions, etc.
-    const objNameMatch = line.match(
-      /name\s*:\s*["']([^"']+)["']/
-    );
-    if (objNameMatch) {
-      const descLine = lines.slice(i, i + 5).join(" ");
-      const descMatch = descLine.match(
-        /description\s*:\s*["']([^"']+)["']/
+    // Only match in non-test source files, near a tool registration context,
+    // and not inside server/app constructors.
+    if (!isTestFile(file.split("/").pop() ?? "")) {
+      const objNameMatch = line.match(
+        /name\s*:\s*["']([^"']+)["']/
       );
-      if (descMatch) {
-        // Exclude server/app constructor metadata
-        const precedingLines = lines.slice(Math.max(0, i - 5), i + 1).join(" ");
-        if (isServerConstructor(precedingLines)) continue;
-
-        // Check for tool registration context in surrounding lines
-        const contextWindow = lines.slice(
-          Math.max(0, i - 10),
-          Math.min(lines.length, i + 10)
-        ).join(" ");
-        if (isToolRegistrationContext(contextWindow)) {
-          tools.push(
-            buildTool(objNameMatch[1], descMatch[1], file, i + 1)
-          );
+      if (objNameMatch) {
+        const descLine = lines.slice(i, i + 5).join(" ");
+        const descMatch = descLine.match(
+          /description\s*:\s*["']([^"']+)["']/
+        );
+        if (descMatch) {
+          // Exclude server/app constructor metadata
+          const precedingLines = lines.slice(Math.max(0, i - 5), i + 1).join(" ");
+          if (!isServerConstructor(precedingLines)) {
+            // Check for tool registration context in surrounding lines
+            const contextWindow = lines.slice(
+              Math.max(0, i - 10),
+              Math.min(lines.length, i + 10)
+            ).join(" ");
+            if (isToolRegistrationContext(contextWindow)) {
+              tools.push(
+                buildTool(objNameMatch[1], descMatch[1], file, i + 1)
+              );
+            }
+          }
         }
       }
     }
@@ -527,6 +529,41 @@ export function detectUpstreamPackage(repoPath: string): string | null {
 }
 
 /**
+ * Find the full import specifiers used to import from an upstream package.
+ * E.g., for playwright-core, returns ["playwright-core/lib/coreBundle"].
+ * Used by runtime extraction to know which sub-paths to try.
+ */
+export function findUpstreamImportPaths(
+  repoPath: string,
+  upstreamPackage: string
+): string[] {
+  const paths = new Set<string>();
+  const sourceFiles = findSourceFiles(repoPath);
+
+  for (const filePath of sourceFiles) {
+    const base = filePath.split("/").pop() ?? "";
+    if (isTestFile(base) || base.endsWith(".d.ts")) continue;
+
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").filter(l => l.trim().length > 0);
+    if (lines.length > 50) continue;
+
+    // Match import/require specifiers that start with the upstream package
+    const importMatches = content.matchAll(
+      /(?:from\s+["']([^"']+)["'])|(?:require\(["']([^"']+)["']\))/g
+    );
+    for (const m of importMatches) {
+      const spec = m[1] ?? m[2];
+      if (spec.startsWith(upstreamPackage + "/") && spec !== upstreamPackage) {
+        paths.add(spec);
+      }
+    }
+  }
+
+  return [...paths];
+}
+
+/**
  * Runtime tool extraction result from the subprocess script.
  */
 interface RuntimeToolDef {
@@ -586,11 +623,14 @@ export function extractToolsRuntime(
     "runtime-extract.cjs"
   );
 
+  // Find actual import paths used in wrapper source for targeted sub-path resolution
+  const importPaths = findUpstreamImportPaths(repoPath, upstreamPackage);
+
   let stdout: string;
   try {
     const result = execFileSync(
       process.execPath,
-      [scriptPath, upstreamPackage, repoPath],
+      [scriptPath, upstreamPackage, repoPath, ...importPaths],
       {
         cwd: repoPath,
         timeout: EXTRACT_SCRIPT_TIMEOUT_MS,

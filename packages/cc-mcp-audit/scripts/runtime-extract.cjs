@@ -22,9 +22,11 @@ const path = require("path");
 
 const pkgName = process.argv[2];
 const repoPath = process.argv[3] || process.cwd();
+// Additional import paths found in the wrapper's source code
+const extraImportPaths = process.argv.slice(4);
 
 if (!pkgName) {
-  process.stderr.write("Usage: runtime-extract.cjs <package-name> [repo-path]\n");
+  process.stderr.write("Usage: runtime-extract.cjs <package-name> [repo-path] [...import-paths]\n");
   process.exit(1);
 }
 
@@ -57,22 +59,45 @@ function isToolDef(obj) {
  */
 function extractFromExports(mod) {
   const tools = [];
-  const seen = new Set();
+  const seenNames = new Set();
+  const visitedObjects = new WeakSet();
 
   function collectTool(obj) {
-    if (!isToolDef(obj)) return;
-    if (seen.has(obj.name)) return;
-    seen.add(obj.name);
-    tools.push({
-      name: obj.name,
-      description: obj.description || "",
-      readOnly: obj.readOnly != null ? Boolean(obj.readOnly) : undefined,
-    });
+    if (!obj || typeof obj !== "object") return;
+
+    // Direct tool def: { name: "...", description: "..." }
+    if (isToolDef(obj)) {
+      if (seenNames.has(obj.name)) return;
+      seenNames.add(obj.name);
+      tools.push({
+        name: obj.name,
+        description: obj.description || "",
+        readOnly: obj.readOnly != null ? Boolean(obj.readOnly) : undefined,
+      });
+      return;
+    }
+
+    // Nested schema pattern: { schema: { name: "...", description: "..." } }
+    if (obj.schema && isToolDef(obj.schema)) {
+      if (seenNames.has(obj.schema.name)) return;
+      seenNames.add(obj.schema.name);
+      tools.push({
+        name: obj.schema.name,
+        description: obj.schema.description || "",
+        readOnly: obj.schema.readOnly != null ? Boolean(obj.schema.readOnly) : undefined,
+      });
+    }
   }
 
   function walkValue(val, depth) {
-    if (depth > 3 || val == null) return;
+    if (depth > 4 || val == null) return;
     if (typeof val !== "object" && typeof val !== "function") return;
+
+    // Prevent cycles and re-visiting the same object
+    if (typeof val === "object") {
+      if (visitedObjects.has(val)) return;
+      visitedObjects.add(val);
+    }
 
     // Array of tool-like objects
     if (Array.isArray(val)) {
@@ -82,18 +107,23 @@ function extractFromExports(mod) {
       return;
     }
 
-    // Map/object of tool-like objects (keyed by name)
-    if (typeof val === "object" && !Array.isArray(val)) {
-      // Check if val itself is a tool def
+    // Object: check if it's a tool def, then walk properties
+    if (typeof val === "object") {
       collectTool(val);
 
-      // Walk own enumerable properties
-      for (const key of Object.keys(val)) {
+      // Only recurse into properties whose keys suggest tool content.
+      // This avoids exploring massive runtime objects (class instances, etc.)
+      const keys = Object.keys(val);
+      for (const key of keys) {
         try {
           const child = val[key];
+          if (child == null || typeof child !== "object") continue;
           if (Array.isArray(child)) {
             walkValue(child, depth + 1);
-          } else if (isToolDef(child)) {
+          } else if (isToolRelatedKey(key)) {
+            walkValue(child, depth + 1);
+          } else {
+            // Still check the direct child as a potential tool def
             collectTool(child);
           }
         } catch {
@@ -129,37 +159,56 @@ function extractFromExports(mod) {
   return tools;
 }
 
+/**
+ * Check if an object key suggests tool-related content worth recursing into.
+ */
+function isToolRelatedKey(key) {
+  return /tool|mcp|server|command|handler|definition|registry|schema|browser/i.test(key);
+}
+
 // Main
 try {
-  // Try the package directly
-  let mod;
-  try {
-    mod = requireFromRepo(pkgName);
-  } catch {
-    // Try common sub-paths
-    const subPaths = [
-      pkgName + "/tools",
-      pkgName + "/lib/tools",
-      pkgName + "/dist/tools",
-      pkgName + "/src/tools",
-    ];
-    for (const sub of subPaths) {
-      try {
-        mod = requireFromRepo(sub);
-        break;
-      } catch {
-        // Continue to next sub-path
+  // Collect tools from the package root and any additional import paths.
+  // The root export may be a runtime object (not the tool registry),
+  // so we also try wrapper-discovered import paths and common sub-paths.
+  const allTools = [];
+  const seenNames = new Set();
+
+  function mergeTools(extracted) {
+    for (const t of extracted) {
+      if (!seenNames.has(t.name)) {
+        seenNames.add(t.name);
+        allTools.push(t);
       }
     }
   }
 
-  if (!mod) {
-    process.stdout.write("[]");
-    process.exit(0);
+  // Try package root
+  try {
+    const rootMod = requireFromRepo(pkgName);
+    mergeTools(extractFromExports(rootMod));
+  } catch {
+    // Package root not requireable
   }
 
-  const tools = extractFromExports(mod);
-  process.stdout.write(JSON.stringify(tools));
+  // Always also try import paths found in the wrapper's source
+  const subPaths = [
+    ...extraImportPaths,
+    pkgName + "/tools",
+    pkgName + "/lib/tools",
+    pkgName + "/dist/tools",
+    pkgName + "/src/tools",
+  ];
+  for (const sub of subPaths) {
+    try {
+      const subMod = requireFromRepo(sub);
+      mergeTools(extractFromExports(subMod));
+    } catch {
+      // Sub-path not available
+    }
+  }
+
+  process.stdout.write(JSON.stringify(allTools));
   process.exit(0);
 } catch (err) {
   process.stderr.write("Runtime extraction error: " + (err.message || String(err)) + "\n");
