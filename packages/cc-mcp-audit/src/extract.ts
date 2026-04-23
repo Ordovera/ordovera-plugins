@@ -225,7 +225,7 @@ function extractTypeScriptTools(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // server.tool("name", ...) or app.tool("name", ...)
+    // server.tool("name", "description", ...) or app.tool("name", "description", ...)
     const toolMatch = line.match(
       /\.tool\(\s*["']([^"']+)["']\s*,\s*["']([^"']*)["']/
     );
@@ -248,7 +248,34 @@ function extractTypeScriptTools(
       continue;
     }
 
+    // server.registerTool("name", { ... }) — MCP SDK registerTool pattern
+    // Name may be on the same line or the next line
+    const registerToolMatch = line.match(
+      /\.registerTool\(\s*["']([^"']+)["']/
+    );
+    if (registerToolMatch) {
+      const description = extractInlineDescription(lines, i);
+      tools.push(
+        buildTool(registerToolMatch[1], description, file, i + 1)
+      );
+      continue;
+    }
+    // Multi-line: .registerTool(\n  "name", ...
+    if (/\.registerTool\(\s*$/.test(line)) {
+      const nextLine = lines[i + 1];
+      const nextMatch = nextLine?.match(/^\s*["']([^"']+)["']/);
+      if (nextMatch) {
+        const description = extractInlineDescription(lines, i + 1);
+        tools.push(
+          buildTool(nextMatch[1], description, file, i + 1)
+        );
+        continue;
+      }
+    }
+
     // Object-style: { name: "toolName", description: "..." }
+    // Only match when near a tool registration context to avoid false positives
+    // from server metadata, CLI descriptors, UI definitions, etc.
     const objNameMatch = line.match(
       /name\s*:\s*["']([^"']+)["']/
     );
@@ -258,9 +285,20 @@ function extractTypeScriptTools(
         /description\s*:\s*["']([^"']+)["']/
       );
       if (descMatch) {
-        tools.push(
-          buildTool(objNameMatch[1], descMatch[1], file, i + 1)
-        );
+        // Exclude server/app constructor metadata
+        const precedingLines = lines.slice(Math.max(0, i - 5), i + 1).join(" ");
+        if (isServerConstructor(precedingLines)) continue;
+
+        // Check for tool registration context in surrounding lines
+        const contextWindow = lines.slice(
+          Math.max(0, i - 10),
+          Math.min(lines.length, i + 10)
+        ).join(" ");
+        if (isToolRegistrationContext(contextWindow)) {
+          tools.push(
+            buildTool(objNameMatch[1], descMatch[1], file, i + 1)
+          );
+        }
       }
     }
   }
@@ -273,6 +311,36 @@ function extractTypeScriptTools(
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Check if a code window suggests tool registration context.
+ * Reduces false positives from server metadata, CLI descriptors, UI definitions, etc.
+ */
+/**
+ * Check if the name: field is inside a server/app constructor (not a tool definition).
+ * E.g., new McpServer({ name: "MyServer", description: "..." })
+ */
+function isServerConstructor(precedingLines: string): boolean {
+  return /new\s+\w*(?:Server|FastMCP)\s*\(/.test(precedingLines)
+    || /(?:Server|FastMCP)\s*\(\s*\{/.test(precedingLines)
+    || /createServer\s*\(\s*\{/.test(precedingLines);
+}
+
+function isToolRegistrationContext(window: string): boolean {
+  // Direct tool registration calls
+  if (/\.tool\s*\(/.test(window)) return true;
+  if (/registerTool\s*\(/.test(window)) return true;
+  if (/addTool\s*\(/.test(window)) return true;
+  // Tool array/list context
+  if (/tools\s*[:=]\s*\[/.test(window)) return true;
+  if (/toolDefinitions/i.test(window)) return true;
+  // setRequestHandler for tool listing
+  if (/setRequestHandler/.test(window)) return true;
+  if (/ListToolsRequest/.test(window)) return true;
+  // Schema-based definitions
+  if (/inputSchema/i.test(window)) return true;
+  return false;
 }
 
 function buildTool(

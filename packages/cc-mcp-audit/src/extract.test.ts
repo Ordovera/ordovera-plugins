@@ -109,6 +109,30 @@ describe("extractTools", () => {
     });
   });
 
+  describe("registerTool server", () => {
+    const tools = extractTools(resolve(fixturesDir, "register-tool-server"));
+
+    it("extracts registerTool definitions (multi-line and single-line)", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("resolve-library-id");
+      expect(names).toContain("query-docs");
+    });
+
+    it("does not extract server metadata as a tool", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).not.toContain("MyServer");
+    });
+
+    it("extracts description from registerTool", () => {
+      const queryDocs = tools.find((t) => t.name === "query-docs");
+      expect(queryDocs?.description).toContain("Query documentation");
+    });
+
+    it("extracts correct count", () => {
+      expect(tools.length).toBe(2);
+    });
+  });
+
   describe("FastMCP server", () => {
     const tools = extractTools(resolve(fixturesDir, "fastmcp-server"));
 
