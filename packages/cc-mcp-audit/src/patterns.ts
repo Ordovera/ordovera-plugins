@@ -124,6 +124,10 @@ const MCP_FRAMEWORK_IMPORTS: RegExp[] = [
   /from\s+["']mcp["']/,
   /require\(["']mcp["']\)/,
   /from\s+["']fastmcp["']/,
+  // Go
+  /github\.com\/modelcontextprotocol\/go-sdk/,
+  /github\.com\/mark3labs\/mcp-go/,
+  /mcp\.Tool\{/,
 ];
 
 export interface PatternResults {
@@ -310,7 +314,7 @@ function findScanFiles(dir: string, depth = 0): string[] {
       files.push(...findScanFiles(fullPath, depth + 1));
     } else {
       const ext = extname(entry);
-      if ([".py", ".ts", ".js", ".mjs", ".json"].includes(ext)) {
+      if ([".py", ".ts", ".js", ".mjs", ".json", ".go"].includes(ext)) {
         files.push(fullPath);
       }
     }

@@ -110,6 +110,80 @@ describe("extractTools", () => {
     });
   });
 
+  describe("Go server", () => {
+    const tools = extractTools(resolve(fixturesDir, "go-server"));
+
+    it("extracts mcp.Tool struct literal definitions", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("get_issue");
+      expect(names).toContain("create_issue");
+      expect(names).toContain("search_code");
+    });
+
+    it("extracts descriptions from Go struct fields", () => {
+      const getIssue = tools.find((t) => t.name === "get_issue");
+      expect(getIssue?.description).toContain("Get details of a specific issue");
+    });
+
+    it("classifies read vs write tools", () => {
+      const getIssue = tools.find((t) => t.name === "get_issue");
+      expect(getIssue?.classification).toBe("read");
+
+      const createIssue = tools.find((t) => t.name === "create_issue");
+      expect(createIssue?.classification).toBe("write");
+    });
+
+    it("includes source file and line info", () => {
+      const tool = tools.find((t) => t.name === "get_issue");
+      expect(tool?.sourceFile).toContain("tools.go");
+      expect(tool?.sourceLine).toBeGreaterThan(0);
+    });
+
+    it("extracts correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
+
+  describe("class-based Python server", () => {
+    const tools = extractTools(resolve(fixturesDir, "class-tool-server"));
+
+    it("extracts tools from class definitions inheriting Tool", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("read_file");
+      expect(names).toContain("create_text_file");
+      expect(names).toContain("list_dir");
+      expect(names).toContain("execute_shell_command");
+    });
+
+    it("handles classes without Tool suffix", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("safe_delete_symbol");
+    });
+
+    it("extracts descriptions from apply() method docstrings", () => {
+      const readFile = tools.find((t) => t.name === "read_file");
+      expect(readFile?.description).toContain("Reads the given file");
+    });
+
+    it("classifies read vs write tools", () => {
+      const readFile = tools.find((t) => t.name === "read_file");
+      expect(readFile?.classification).toBe("read");
+
+      const createFile = tools.find((t) => t.name === "create_text_file");
+      expect(createFile?.classification).toBe("write");
+    });
+
+    it("does not extract the base Tool class itself", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).not.toContain("");
+      expect(names).not.toContain("tool");
+    });
+
+    it("extracts correct count", () => {
+      expect(tools.length).toBe(5);
+    });
+  });
+
   describe("registerTool server", () => {
     const tools = extractTools(resolve(fixturesDir, "register-tool-server"));
 

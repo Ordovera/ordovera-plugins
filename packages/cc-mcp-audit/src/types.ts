@@ -139,7 +139,7 @@ export interface ServerReport {
    */
   commitHash: string | null;
   /** Primary language detected */
-  language: "typescript" | "python" | "javascript" | "unknown";
+  language: "typescript" | "python" | "javascript" | "go" | "unknown";
   /**
    * Upstream package this server wraps, if detected.
    * Present when the extractor finds 0 tools but identifies the repo as a

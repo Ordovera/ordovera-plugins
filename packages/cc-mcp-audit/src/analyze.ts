@@ -26,7 +26,7 @@ import { deriveIndicators } from "./indicators.js";
 function detectLanguage(
   repoPath: string
 ): ServerReport["language"] {
-  const counts = { ts: 0, js: 0, py: 0 };
+  const counts = { ts: 0, js: 0, py: 0, go: 0 };
 
   function walk(dir: string, depth = 0): void {
     if (depth > 4) return;
@@ -45,12 +45,17 @@ function detectLanguage(
         counts.js++;
       } else if (entry.name.endsWith(".py")) {
         counts.py++;
+      } else if (entry.name.endsWith(".go")) {
+        counts.go++;
       }
     }
   }
 
   walk(repoPath);
 
+  const max = Math.max(counts.ts, counts.js, counts.py, counts.go);
+  if (max === 0) return "unknown";
+  if (counts.go === max) return "go";
   if (counts.ts >= counts.js && counts.ts >= counts.py) {
     return counts.ts > 0 ? "typescript" : "unknown";
   }

@@ -40,6 +40,8 @@ export function extractTools(repoPath: string): ExtractedTool[] {
       tools.push(...extractPythonTools(content, relPath));
     } else if (ext === ".ts" || ext === ".js" || ext === ".mjs") {
       tools.push(...extractTypeScriptTools(content, relPath));
+    } else if (ext === ".go") {
+      tools.push(...extractGoTools(content, relPath));
     }
   }
 
@@ -168,9 +170,59 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
         buildTool(nameKwMatch[1], description, file, i + 1)
       );
     }
+
+    // Class-based pattern: class FooBarTool(Tool, ...):
+    // Tool name derived from class name: strip "Tool" suffix, convert to snake_case
+    const classMatch = line.match(
+      /^class\s+([A-Za-z][A-Za-z0-9]*)\s*\([^)]*\bTool\b[^)]*\)\s*:/
+    );
+    if (classMatch) {
+      const className = classMatch[1];
+      const toolName = classNameToToolName(className);
+      // Find the apply() method docstring for description
+      const description = extractClassApplyDocstring(lines, i);
+      tools.push(buildTool(toolName, description, file, i + 1));
+    }
   }
 
   return tools;
+}
+
+/**
+ * Convert a CamelCase class name to a snake_case tool name.
+ * Strips "Tool" suffix if present, then converts to snake_case.
+ */
+function classNameToToolName(className: string): string {
+  let name = className;
+  if (name.endsWith("Tool")) {
+    name = name.slice(0, -4);
+  }
+  // Insert underscore before each uppercase letter, lowercase everything
+  return name
+    .replace(/([A-Z])/g, "_$1")
+    .toLowerCase()
+    .replace(/^_/, "");
+}
+
+/**
+ * Find the docstring from a class's apply() method.
+ * Searches forward from the class definition for `def apply(` and extracts
+ * the triple-quoted docstring.
+ */
+function extractClassApplyDocstring(
+  lines: string[],
+  classLine: number
+): string {
+  // Search forward for the apply method (within 100 lines)
+  for (let j = classLine + 1; j < Math.min(classLine + 100, lines.length); j++) {
+    // Stop at the next class definition
+    if (/^class\s/.test(lines[j])) break;
+
+    if (/def\s+apply\s*\(/.test(lines[j])) {
+      return extractPythonDocstring(lines, j + 1);
+    }
+  }
+  return "";
 }
 
 /**
@@ -319,6 +371,72 @@ function extractTypeScriptTools(
  * Check if a code window suggests tool registration context.
  * Reduces false positives from server metadata, CLI descriptors, UI definitions, etc.
  */
+/**
+ * Extract tools from Go source files.
+ *
+ * Patterns:
+ * - mcp.Tool{ Name: "tool_name", Description: "..." } struct literals
+ * - server.AddTool() / s.AddTool() calls with inline Name
+ */
+function extractGoTools(content: string, file: string): ExtractedTool[] {
+  const tools: ExtractedTool[] = [];
+  const lines = content.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Pattern 1: Name: "tool_name" inside an mcp.Tool struct literal
+    // Look for Name field in Go struct context
+    const nameFieldMatch = line.match(
+      /Name\s*:\s*["'`]([^"'`]+)["'`]/
+    );
+    if (nameFieldMatch) {
+      // Verify this is inside an mcp.Tool or tool-related context
+      const contextWindow = lines.slice(
+        Math.max(0, i - 10),
+        Math.min(lines.length, i + 5)
+      ).join(" ");
+
+      if (isGoToolContext(contextWindow)) {
+        // Find Description field nearby
+        const descWindow = lines.slice(i, Math.min(i + 10, lines.length)).join(" ");
+        const descMatch = descWindow.match(
+          /Description\s*:\s*(?:t\([^)]*\)\s*,\s*)?["'`]([^"'`]+)["'`]/
+        );
+        // Also check preceding lines for Description
+        const descBefore = lines.slice(Math.max(0, i - 5), i + 1).join(" ");
+        const descBeforeMatch = descBefore.match(
+          /Description\s*:\s*(?:t\([^)]*\)\s*,\s*)?["'`]([^"'`]+)["'`]/
+        );
+        const description = descMatch?.[1] ?? descBeforeMatch?.[1] ?? "";
+        tools.push(buildTool(nameFieldMatch[1], description, file, i + 1));
+      }
+    }
+  }
+
+  // Deduplicate by name+file
+  const seen = new Set<string>();
+  return tools.filter((t) => {
+    const key = `${t.name}:${t.sourceFile}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Check if Go code context suggests a tool definition (not a generic struct).
+ */
+function isGoToolContext(window: string): boolean {
+  if (/mcp\.Tool\s*\{/.test(window)) return true;
+  if (/\.AddTool\s*\(/.test(window)) return true;
+  if (/NewTool\s*\(/.test(window)) return true;
+  if (/ToolDefinition/.test(window)) return true;
+  if (/ServerTool/.test(window)) return true;
+  if (/toolHandler/.test(window)) return true;
+  return false;
+}
+
 /**
  * Check if the name: field is inside a server/app constructor (not a tool definition).
  * E.g., new McpServer({ name: "MyServer", description: "..." })
@@ -957,7 +1075,7 @@ function findSourceFiles(dir: string, depth = 0): string[] {
       files.push(...findSourceFiles(fullPath, depth + 1));
     } else {
       const ext = extname(entry);
-      if ([".py", ".ts", ".js", ".mjs"].includes(ext)) {
+      if ([".py", ".ts", ".js", ".mjs", ".go"].includes(ext)) {
         files.push(fullPath);
       }
     }
