@@ -1,11 +1,21 @@
 {
   "name": "cc-sc-verify",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Supply chain integrity checker for Claude Code plugins. Verifies installed plugins against their source repos for tampering, version drift, repo deletion, and tool definition changes.",
   "type": "module",
   "bin": {
     "cc-sc-verify": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ordovera/ordovera-plugins.git",
+    "directory": "packages/cc-sc-verify"
+  },
+  "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/packages/cc-sc-verify",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

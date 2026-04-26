@@ -30,9 +30,10 @@ Reads all context sources and checks them against the filesystem and project con
    - Hook locations and script paths mentioned in context vs `.claude/settings.json`, hook directories, or referenced scripts
    - Statements about operator-owned automation that no longer match the files on disk
 
-5. **Working-memory references:**
-   - If `MEMORY.md` exists, references inside it vs current files, directories, and current context structure
-   - Detect when `MEMORY.md` points at deleted paths or stale migration plans
+5. **Project-root MEMORY.md detection:**
+   - If a project-root `MEMORY.md` exists, flag it: this file conflicts with Claude Code's built-in auto memory system (`~/.claude/projects/<project>/memory/`). Claude manages its own memory automatically -- users should not create MEMORY.md manually.
+   - If it contains durable content (architecture, policy, conventions), note that this content should migrate to AGENTS.md or context/ files.
+   - If it contains stale references (deleted paths, outdated migration plans), flag those as drift findings like any other context file.
 
 6. **Skill relevance:**
    - Skill descriptions referencing technologies not in this project's stack
@@ -81,6 +82,6 @@ This skill operationalizes the "they rot" principle from Key Principles. Context
 
 Context-align checks *references* (does this file/package/command exist?), not *accuracy* (is this architectural description still true?). The latter requires human judgment. This skill handles the mechanical checks so humans can focus on the substantive ones.
 
-If `MEMORY.md` exists, treat it as optional and volatile. The goal is not to enforce its presence, only to catch stale references when teams choose to use it.
+A project-root `MEMORY.md` is a common misconception ("just add MEMORY.md, it's magic"). Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` where Claude saves corrections, preferences, and insights automatically. A manually created project-root MEMORY.md conflicts with this -- Claude may read both, content diverges, and users maintain a file that duplicates a built-in feature. If found, flag it for removal and migrate durable content to AGENTS.md or context/.
 
 Cascading contradictions are a specific failure mode of multi-level context. A project AGENTS.md might say "use Vitest for testing" while a subdirectory AGENTS.md says "use Jest for this module." Both might be intentional (legacy module with different tooling) or accidental (subdirectory file wasn't updated). The skill surfaces the contradiction; the human decides which is correct.

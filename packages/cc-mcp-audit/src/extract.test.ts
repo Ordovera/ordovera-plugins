@@ -144,6 +144,31 @@ describe("extractTools", () => {
     });
   });
 
+  describe("stacked decorator server", () => {
+    const tools = extractTools(resolve(fixturesDir, "stacked-decorator-server"));
+
+    it("extracts tools through stacked decorators", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("search_items");
+      expect(names).toContain("delete_item");
+      expect(names).toContain("get_status");
+    });
+
+    it("extracts tools through stacked decorators after multi-line @mcp.tool()", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("custom_create");
+    });
+
+    it("extracts descriptions from docstrings past stacked decorators", () => {
+      const search = tools.find((t) => t.name === "search_items");
+      expect(search?.description).toContain("Search for items");
+    });
+
+    it("extracts correct count", () => {
+      expect(tools.length).toBe(4);
+    });
+  });
+
   describe("class-based Python server", () => {
     const tools = extractTools(resolve(fixturesDir, "class-tool-server"));
 

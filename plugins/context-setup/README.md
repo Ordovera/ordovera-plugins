@@ -24,8 +24,9 @@ Originally developed as part of [context-engineering](https://github.com/fending
 
 - `AGENTS.md` is the primary artifact.
 - `CLAUDE.md` is the compatibility surface and should point at `AGENTS.md`, not fork away from it.
-- `context/` exists to keep root guidance compact, durable, and survivable across long sessions.
-- `MEMORY.md` is not a required pattern. When it adds value, it holds execution state that should survive context compression but not outlive the current work session -- active debugging hypotheses, in-flight migration checklists, temporary coordination notes. If the content would still be relevant next month, it belongs in `AGENTS.md` or `context/`. The plugin recognizes existing `MEMORY.md` files and helps keep them from becoming a second root policy file.
+- `context/` holds reference assets (architecture, methodology, requirements) -- loaded by whatever needs them, not Claude Code-specific.
+- `.claude/rules/` holds path-specific coding instructions with `paths:` frontmatter -- auto-loaded by Claude Code when working with matching files, survives compaction.
+- Do not create project-root `MEMORY.md` files. Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` that Claude manages automatically -- saving corrections, preferences, and insights across sessions. A manually created project-root MEMORY.md conflicts with this system. If one is found, the plugin flags it for removal and helps migrate durable content into `AGENTS.md` or `context/` files.
 - Hook config, MCP config, and other operator-owned automation are part of the context trust boundary and should be documented clearly enough that agents know what they may rely on and what they should treat carefully.
 - The trust-boundary and `MEMORY.md` positions in v2.0.0 were informed by the Claude Code source leak of 31 March 2026 -- specifically, by what the extracted code actually shows about context loading and memory patterns, rather than by the speculative framing in popular coverage.
 
@@ -86,7 +87,7 @@ The plugin auto-updates when the source repo gets new commits. If your installed
 1. Verify: check `~/.claude/plugins/cache/context-setup/context-setup/`. The directory name should be a git SHA (like `dea82eb8999f`), not a semver string (like `1.0.0`). If it's semver, you have the old cache format.
 
 2. Fix: remove the stale cache and marketplace clone (`rm -rf ~/.claude/plugins/marketplaces/context-setup` and `rm -rf ~/.claude/plugins/cache/context-setup/context-setup/`), then reinstall with `/plugin install context-setup@ordovera-plugins`.
-3. Verify after reinstall: the cache directory should now be a git SHA, and all 6 skills should be available.
+3. Verify after reinstall: the cache directory should now be a git SHA, and all 8 skills should be available.
 
 ## Skills
 
@@ -138,9 +139,28 @@ For contributors working on the plugin itself, see [`docs/verification.md`](docs
 - `context-usage` depends on visible session history and is less useful after history compression.
 - `context-mcp` includes both deterministic template matching and best-effort guidance for unknown servers.
 
-## Learning the Patterns
+## References
 
-This plugin generates context files based on patterns documented in the [context-engineering](https://github.com/fending/context-engineering) repo. For the theory behind the structures, read the repo's examples and the companion article: [Rethinking Team Topologies for AI-Augmented Development](https://brianfending.substack.com/p/rethinking-team-topologies-for-ai).
+Official Claude Code documentation that informs this plugin's design:
+
+- [How Claude remembers your project](https://code.claude.com/docs/en/memory) -- CLAUDE.md files, `.claude/rules/`, auto memory, `@import` syntax, compaction behavior, instruction hierarchy
+- [Skills](https://code.claude.com/docs/en/skills) -- how SKILL.md files work, when to use skills vs rules vs CLAUDE.md
+- [Hooks](https://code.claude.com/docs/en/hooks) -- hook events (PreToolUse, PostToolUse), `InstructionsLoaded` hook for debugging which files load
+- [Context window](https://code.claude.com/docs/en/context-window) -- what survives compaction, context visualization, token budget
+- [Settings](https://code.claude.com/docs/en/settings) -- `claudeMdExcludes`, `autoMemoryEnabled`, managed settings, settings layers
+- [Debug your configuration](https://code.claude.com/docs/en/debug-your-config) -- diagnosing why CLAUDE.md or settings aren't taking effect
+
+Sibling plugins and packages in this repo:
+
+- [top10-scan plugin](../top10-scan/) -- OWASP Top 10 security scanning
+- [mcp-audit plugin](../mcp-audit/) -- MCP server governance posture analysis
+- [cc-sc-verify package](../../packages/cc-sc-verify/) -- supply chain integrity checker for installed plugins (`npx cc-sc-verify`)
+- [cc-mcp-audit package](../../packages/cc-mcp-audit/) -- governance posture CLI that powers the mcp-audit plugin (`npx cc-mcp-audit`)
+
+Related resources:
+
+- [context-engineering](https://github.com/fending/context-engineering) -- patterns and examples this plugin implements
+- [Rethinking Team Topologies for AI-Augmented Development](https://brianfending.substack.com/p/rethinking-team-topologies-for-ai) -- theory behind the context structures
 
 ## Disclaimer
 

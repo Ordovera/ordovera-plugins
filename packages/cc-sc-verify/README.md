@@ -65,9 +65,15 @@ Plugins: 2 checked, 2 with issues
   Installed: 2026-04-02 | Last updated: 2026-04-02
   SHA: 6c97949accf5 -> 308d243e024c (BEHIND)
 
+[OK] mcp-audit (ordovera-plugins)
+  Repo: ordovera/ordovera-plugins
+  Installed: 2026-04-15 | Last updated: 2026-04-15
+  SHA: 308d243e024c (CURRENT)
+
 Summary
 -------
   Behind upstream: context-setup, top10-scan
+  Current: mcp-audit
 ```
 
 ## What this does NOT cover
@@ -92,6 +98,13 @@ The gap cc-sc-verify fills: every existing tool audits either structure/permissi
 ## Environment
 
 - **GITHUB_TOKEN** -- Optional. GitHub personal access token for authenticated API access. Without it, you're limited to 60 requests per hour (enough for a few plugins). With it, 5,000 per hour.
+
+## Sibling packages and plugins
+
+- [cc-mcp-audit package](../cc-mcp-audit/) -- governance posture CLI for MCP servers
+- [mcp-audit plugin](../../plugins/mcp-audit/) -- interpretive MCP governance analysis
+- [context-setup plugin](../../plugins/context-setup/) -- context engineering and trust boundary documentation
+- [top10-scan plugin](../../plugins/top10-scan/) -- OWASP Top 10 security scanning
 
 ## License
 

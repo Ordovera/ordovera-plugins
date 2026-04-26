@@ -73,16 +73,14 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       continue;
     }
 
-    // Bare decorator: @server.tool() with function name on next line
+    // Bare decorator: @server.tool() with function name on next line (or after stacked decorators)
     const bareDecoratorMatch = line.match(/@\w+\.tool\(\s*\)/);
     if (bareDecoratorMatch) {
-      const funcMatch = lines[i + 1]?.match(
-        /(?:async\s+)?def\s+(\w+)/
-      );
-      if (funcMatch) {
-        const description = extractPythonDocstring(lines, i + 2);
+      const { funcName, defLine } = findDefAfterDecorators(lines, i + 1);
+      if (funcName && defLine >= 0) {
+        const description = extractPythonDocstring(lines, defLine + 1);
         tools.push(
-          buildTool(funcMatch[1], description, file, i + 1)
+          buildTool(funcName, description, file, i + 1)
         );
       }
       continue;
@@ -95,18 +93,9 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       if (closingLine >= 0) {
         const nameFromDecorator = extractKwarg(body, "name");
         const descFromDecorator = extractKwarg(body, "description");
-        // Find the def line after the closing paren
-        let defLine = -1;
-        let funcName: string | undefined;
-        for (let j = closingLine + 1; j < Math.min(closingLine + 3, lines.length); j++) {
-          const defMatch = lines[j]?.match(/(?:async\s+)?def\s+(\w+)/);
-          if (defMatch) {
-            funcName = defMatch[1];
-            defLine = j;
-            break;
-          }
-        }
-        if (funcName) {
+        // Find the def line after the closing paren (skip stacked decorators)
+        const { funcName, defLine } = findDefAfterDecorators(lines, closingLine + 1);
+        if (funcName && defLine >= 0) {
           const name = nameFromDecorator ?? funcName;
           const description = descFromDecorator
             ?? extractPythonDocstring(lines, defLine + 1);
@@ -499,6 +488,28 @@ function buildTool(
     sourceFile: file,
     sourceLine: line,
   };
+}
+
+/**
+ * Starting from a given line, skip past any stacked decorators (@...)
+ * to find the next `def` or `async def` line.
+ * Returns the function name and line index, or null if not found within 5 lines.
+ */
+function findDefAfterDecorators(
+  lines: string[],
+  startLine: number
+): { funcName: string | undefined; defLine: number } {
+  for (let j = startLine; j < Math.min(startLine + 5, lines.length); j++) {
+    const defMatch = lines[j]?.match(/(?:async\s+)?def\s+(\w+)/);
+    if (defMatch) {
+      return { funcName: defMatch[1], defLine: j };
+    }
+    // Skip lines that are decorators or blank
+    if (/^\s*@/.test(lines[j]) || /^\s*$/.test(lines[j])) continue;
+    // Hit something that's not a decorator or def -- stop
+    break;
+  }
+  return { funcName: undefined, defLine: -1 };
 }
 
 function extractPythonDocstring(

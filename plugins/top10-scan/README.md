@@ -150,6 +150,26 @@ The `test-fixtures/` directory contains seven intentionally vulnerable applicati
 
 Each has a README documenting planted vulnerabilities and expected results in `expected-results/`.
 
+## References
+
+Official Claude Code documentation relevant to security scanning:
+
+- [How Claude remembers your project](https://code.claude.com/docs/en/memory) -- CLAUDE.md files, `.claude/rules/`, instruction hierarchy for documenting security policies
+- [Hooks](https://code.claude.com/docs/en/hooks) -- hook events for enforcing security gates before code changes
+- [Settings](https://code.claude.com/docs/en/settings) -- managed settings, `permissions.deny` for blocking unsafe operations
+
+Security standards:
+
+- [OWASP Top 10:2025](https://owasp.org/Top10/) -- the vulnerability taxonomy this plugin maps to
+- [SARIF 2.1.0 Specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) -- machine-readable output format
+
+Sibling plugins and packages in this repo:
+
+- [context-setup plugin](../context-setup/) -- trust boundary documentation and MCP optimization
+- [mcp-audit plugin](../mcp-audit/) -- MCP server governance posture analysis
+- [cc-sc-verify package](../../packages/cc-sc-verify/) -- supply chain integrity checker for installed plugins (`npx cc-sc-verify`)
+- [cc-mcp-audit package](../../packages/cc-mcp-audit/) -- governance posture CLI for MCP servers (`npx cc-mcp-audit`)
+
 ## Disclaimer
 
 This software is provided as-is, without warranty of any kind. The authors and contributors are not liable for any damages, security incidents, or losses arising from its use. This plugin is a tool to assist with security analysis -- it does not guarantee the security of any codebase and is not a substitute for professional security audits, penetration testing, or compliance review. Findings may include false positives or miss real vulnerabilities. Always validate findings independently before acting on them.

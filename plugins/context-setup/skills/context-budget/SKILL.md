@@ -45,11 +45,14 @@ Source configs: same detection paths as context-mcp (`.mcp.json`, `~/.claude/set
 
 ### 4. Measure Auto-Memory
 
+Claude Code's built-in auto memory lives at `~/.claude/projects/<project>/memory/`. Claude manages this automatically -- users do not create these files manually.
+
 Check for auto-memory at `~/.claude/projects/*/memory/`:
 
-- Count memory files
+- Count memory files (MEMORY.md index + topic files like debugging.md, patterns.md)
 - Estimate MEMORY.md index size (~3 tokens per line)
-- Note: individual memory files load on demand, but MEMORY.md index loads at session start
+- Note: first 200 lines or 25KB of MEMORY.md loads at session start; topic files load on demand
+- If a project-root MEMORY.md also exists, flag it as conflicting with the built-in system
 
 Ask before reading memory paths outside the current project.
 

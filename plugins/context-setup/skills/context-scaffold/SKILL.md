@@ -23,7 +23,7 @@ Detection markers, complexity levels, and section specifications are defined in 
    - Detect multiple backing services: count distinct service client packages (e.g., supabase + jira, prisma + stripe, aws-sdk + firebase). If 2+ detected, flag for Integration Map section.
    - Detect MCP server configs: check `.mcp.json`, `.vscode/mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`, `.gemini/settings.json` at the project level. Match detected servers against known templates (Atlassian, Gmail, Google Calendar, Web, GitHub, Supabase, Vercel). If any are found, include an MCP Tool Notes section in the generated output.
    - Detect trust-adjacent automation: `.claude/settings.json`, `.claude/hooks/`, referenced hook scripts, and equivalent operator-owned config. If found, generate a lightweight trust-boundary section or placeholder rather than treating these files as invisible implementation detail.
-   - Detect `MEMORY.md` if present. Treat it as an existing optional artifact to reconcile with generated context, not as the primary format to adopt.
+   - Detect project-root `MEMORY.md` if present. This is NOT the same as Claude Code's built-in auto memory (which lives at `~/.claude/projects/<project>/memory/` and is written by Claude automatically). A project-root MEMORY.md is a user-created file that should not exist -- it duplicates or conflicts with the built-in system. If found, recommend removing it and migrating any durable content into AGENTS.md or context/ files.
 
 2. **Determine complexity level.** Present a recommendation with rationale, let the user choose:
    - **Minimal** (~40 lines): Solo project, single language, straightforward structure. One deployment target, no auth layer, no multi-service architecture.
@@ -36,7 +36,8 @@ Detection markers, complexity levels, and section specifications are defined in 
    - Create `CLAUDE.md` symlink: `ln -s AGENTS.md CLAUDE.md`
    - List what was created
    - Highlight sections with bracket placeholders that need human review
-   - If `MEMORY.md` already exists, call it out explicitly: keep it only if it holds short-lived working memory, and move durable policy or architecture back into `AGENTS.md` / `context/`
+   - Mention `CLAUDE.local.md`: "For personal project-specific preferences (sandbox URLs, preferred test data, local dev overrides), create `CLAUDE.local.md` in the project root. It loads alongside CLAUDE.md but is gitignored -- your personal settings won't affect teammates."
+   - If a project-root `MEMORY.md` exists, flag it: this file conflicts with Claude Code's built-in auto memory system. Recommend removing it and migrating any durable content (architecture, policy, conventions) into AGENTS.md or context/ files. Claude Code manages its own memory at `~/.claude/projects/<project>/memory/` -- users should not create MEMORY.md manually.
 
 ## Templates
 
@@ -119,8 +120,8 @@ Generate a single `AGENTS.md` with all minimal sections plus the following. Popu
 - [State that MCP selection, credentials, hook behavior, and operator-local tooling are not routine edit targets unless explicitly asked.]
 - [Describe any stable expectations agents should know, such as "hooks may block writes" or "MCP servers are available for reads but are operator-configured".]
 
-[If the project already has `MEMORY.md`, add one short note here or in a nearby section:]
-- [This repo also has `MEMORY.md`; keep it for short-lived working memory only. Durable rules belong in AGENTS.md or `context/` files.]
+[If a project-root `MEMORY.md` is detected, add a note here:]
+- [This repo has a manually created `MEMORY.md`. Remove it -- Claude Code manages its own auto memory at `~/.claude/projects/<project>/memory/`. Migrate any durable content (architecture, policy, conventions) into AGENTS.md or `context/` files. Do not create MEMORY.md manually; it conflicts with the built-in system.]
 
 ## Project Structure
 
@@ -179,43 +180,84 @@ Not every route goes through the default database. Before creating a new API rou
 
 Generate the following file set:
 
-**Project-root `AGENTS.md`** -- Entry point. Contains: project description, tech stack summary, commands, code standards, Do NOT section, trust-boundary summary when relevant, and a note pointing to `context/` for architectural detail. Keep this file under 60 lines. This file should be durable across long sessions: no sprint logs, migration diaries, or bulky troubleshooting notes.
+**Project-root `AGENTS.md`** -- Entry point. Contains: project description, tech stack summary, commands, code standards, Do NOT section, trust-boundary summary when relevant, and pointers to `context/` for reference assets and `.claude/rules/` for path-specific instructions. Keep this file under 60 lines. This file should be durable across long sessions: no sprint logs, migration diaries, or bulky troubleshooting notes.
 
-**`context/system-overview.md`** -- What the system does at a high level. Business context, user-facing functionality, key workflows. This is the "what" that AGENTS.md doesn't cover.
+**`context/` directory** -- Reference assets that don't map to file path globs. These are loose resources loaded by whatever needs them -- skills, agents, humans. Not Claude Code-specific. Generate the following based on project complexity:
 
-**`context/architecture-decisions.md`** -- Why the system is built this way. Key technical choices and their rationale. Framework selection, database choice, auth approach, deployment architecture, and the reasoning behind each.
+- **`context/system-overview.md`** -- What the system does at a high level. Business context, user-facing functionality, key workflows. This is the "what" that AGENTS.md doesn't cover.
+- **`context/architecture-decisions.md`** -- Why the system is built this way. Key technical choices and their rationale. Framework selection, database choice, auth approach, deployment architecture, and the reasoning behind each.
+- **`context/operational-boundaries.md`** -- Generate when trust-adjacent automation is detected or clearly likely to matter. Document MCP servers, hooks, operator-owned local automation, and any expectations about how agents should use or avoid changing those surfaces.
+- **`context/technical-requirements.md`** -- Non-functional requirements: performance targets, security requirements, accessibility standards, browser/device support, compliance requirements. Only include sections relevant to the project.
+- **`context/api-documentation.md`** -- API surface: endpoints, request/response formats, auth requirements, error codes, versioning. For internal APIs between services, document the contract.
+- **`context/working-style-guide.md`** -- How to contribute: PR process, review expectations, testing requirements, branch naming, commit conventions. Team workflow rather than code style.
 
-**`context/operational-boundaries.md`** -- Generate this file when trust-adjacent automation is detected or clearly likely to matter. Document MCP servers, hooks, operator-owned local automation, and any expectations about how agents should use or avoid changing those surfaces.
+Additional `context/` files are fine -- methodology docs (TDD, SDD, agile), onboarding guides, research briefs, or any reference material that supports the project. The list above is a starting set, not a ceiling.
 
-**`context/technical-requirements.md`** -- Non-functional requirements: performance targets, security requirements, accessibility standards, browser/device support, compliance requirements. Only include sections relevant to the project.
+**Optional: `@import` for critical context/ files.** Claude Code supports `@path/to/file` syntax in CLAUDE.md that expands at launch, guaranteeing the file loads into every session. For context/ files that should always be available (system-overview, architecture-decisions), adding `@context/system-overview.md` to the root file ensures they load without Claude needing to decide to read them. The tradeoff:
 
-**`context/api-documentation.md`** -- API surface: endpoints, request/response formats, auth requirements, error codes, versioning. For internal APIs between services, document the contract.
+- `@import`: always loaded (reliable, survives compaction via root re-injection), costs tokens every session regardless of relevance
+- Standalone: loaded on demand (efficient, zero cost when not needed), may be missed if Claude doesn't know to look
 
-**`context/working-style-guide.md`** -- How to contribute: PR process, review expectations, testing requirements, branch naming, commit conventions. Team workflow rather than code style.
+Since CLAUDE.md is a symlink to AGENTS.md, `@import` lines appear in both files. Other tools see `@context/system-overview.md` as literal text -- only Claude Code expands it. This is harmless (other tools ignore the line) but worth knowing. Recommend @importing at most 2-3 critical files to keep the token tradeoff favorable. Leave optional reference docs (methodology, onboarding, research) as standalone files.
 
-**Subdirectory `AGENTS.md` files** -- Generate these only for directories that have clearly distinct patterns worth documenting. Common candidates:
+**`.claude/rules/` directory** -- Path-specific coding instructions that Claude Code auto-loads when working with matching files. These use YAML `paths:` frontmatter so they consume context tokens only when relevant. Generate rules files when the project has areas with distinct coding patterns. Common candidates:
 
-- `src/api/` or equivalent API layer (error handling, response formats)
-- `src/components/` or equivalent UI layer (component patterns, state management)
-- `tests/` (testing conventions, fixture patterns, mocking approach)
+- **`.claude/rules/api-conventions.md`** with `paths: ["src/api/**"]` -- Error handling, response formats, middleware patterns, auth requirements for API routes.
+- **`.claude/rules/component-patterns.md`** with `paths: ["src/components/**"]` -- Component structure, state management, prop conventions, styling approach.
+- **`.claude/rules/test-conventions.md`** with `paths: ["tests/**", "**/*.test.*"]` -- Testing patterns, fixture approach, mocking policy, coverage expectations.
 
-Each subdirectory file should contain only what's specific to that area. Do not duplicate project-root content.
+Rules without `paths:` frontmatter load unconditionally at session start (same as root CLAUDE.md). Only omit `paths:` when the rule truly applies to all files.
 
-If `MEMORY.md` already exists:
+The distinction: `context/` holds reference knowledge (architecture, methodology, requirements). `.claude/rules/` holds coding instructions scoped to file paths. If the content answers "what conventions apply when editing files in this directory?" it belongs in rules. If it answers "why is the system built this way?" or "what methodology do we follow?" it belongs in context.
 
-- do not replace `AGENTS.md` with it
-- do not generate a new `MEMORY.md` by default
-- mention in the output summary that it was detected
-- recommend trimming it to volatile execution context if it duplicates durable policy or architecture
+**Subdirectory `AGENTS.md` files** -- Generate these only for directories that have clearly distinct patterns AND need cross-tool visibility (Cursor, Windsurf, other agents). If the guidance is Claude Code-only, prefer `.claude/rules/` with `paths:` scoping instead -- it auto-loads and survives compaction. Do not duplicate project-root content in either case.
+
+**How compaction affects each layer.** When Claude Code runs `/compact` or auto-compacts during long sessions, prior conversation is summarized but instruction files are selectively re-injected. Understanding what survives determines where to put what:
+
+| Layer | After compaction | Mechanism |
+|---|---|---|
+| Root CLAUDE.md (symlinked AGENTS.md) | Re-read from disk and re-injected | Always survives |
+| `@import`ed files | Re-expanded as part of root re-injection | Survives (because root survives) |
+| `.claude/rules/` (no `paths:`) | Re-injected at same priority as root | Always survives |
+| `.claude/rules/` (with `paths:`) | Reloads next time Claude reads a file matching the glob | Survives on next relevant file access |
+| Subdirectory CLAUDE.md / AGENTS.md | NOT re-injected; reloads next time Claude reads files in that directory | May be lost until Claude works in that area again |
+| `context/` files (standalone) | NOT re-injected; only available if Claude decides to re-read | May be lost until explicitly re-read |
+| Auto memory (MEMORY.md index) | Re-injected (first 200 lines / 25KB) | Always survives |
+| Conversation-only instructions | Summarized or lost | Does not survive -- add to AGENTS.md if durable |
+
+This is why the root file should be a durable entrypoint (stable guidance that matters every session), critical reference assets should be @imported (guaranteed re-injection), and path-specific instructions should use `.claude/rules/` with `paths:` (automatic reload on file access). Volatile detail in standalone `context/` files is fine -- it only needs to be available when relevant, and Claude can re-read it.
+
+If a project-root `MEMORY.md` is detected:
+
+- do not adopt it as the primary context format
+- do not generate a new `MEMORY.md`
+- flag it in the output summary: "Found project-root MEMORY.md. This conflicts with Claude Code's built-in auto memory system (`~/.claude/projects/<project>/memory/`). Recommend removing it and migrating any durable content into AGENTS.md or context/ files."
+- if it contains architecture, policy, or conventions, extract those into the appropriate generated files
 
 ## Key Constraints
 
 - Never fabricate project information. If something can't be detected, use a bracket placeholder. `[describe your auth mechanism]` is better than a wrong guess.
 - Populate sections from config files and directory structure, not from reading application code. Scanning code for architectural patterns is unreliable and slow.
-- The CLAUDE.md symlink is required. Always create it.
+- The CLAUDE.md symlink is required. Always create it. Symlink is chosen over `@AGENTS.md` import for measurable reasons: 1 read-resolution step (OS inode follow) vs 5 (detect `@`, resolve path, read, parse, inline); 1 write target vs 2 (import creates a second file that can accumulate divergent content); 1 possible divergence point (broken symlink) vs N (primary + every imported file, up to 5 levels deep); transparent to all tools (cat, grep, Cursor, Windsurf, Claude Code) vs Claude Code only (@import is not resolved by other tools reading CLAUDE.md). The symlink-check hook and audit skill enforce integrity with 3 checks (not symlink, wrong target, missing).
 - Bracket placeholders should describe the *kind* of content that belongs there, not just say `[TODO]`. Write `[describe how requests flow from route handler to database and back]` not `[fill in later]`.
 - Keep the root file as an entrypoint, not a dump. If generated content starts to exceed that role, prefer a `context/` file over stuffing more volatility into `AGENTS.md`.
-- `AGENTS.md` stays primary. `CLAUDE.md` is the compatibility surface. `MEMORY.md`, when present, is optional and secondary.
+- `AGENTS.md` stays primary. `CLAUDE.md` is the compatibility surface (see symlink rationale above). Do not create or encourage project-root `MEMORY.md` files -- Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` that Claude manages automatically. Users should not manually create MEMORY.md; if one exists, recommend removing it.
+
+## Full Instruction Hierarchy
+
+Teams making context decisions should understand every layer Claude Code loads, from broadest to most specific. More specific layers take precedence:
+
+| Layer | Location | Who writes it | Shared with | Use for |
+|---|---|---|---|---|
+| Managed policy | macOS: `/Library/Application Support/ClaudeCode/CLAUDE.md`; Linux/WSL: `/etc/claude-code/CLAUDE.md` | IT/DevOps via MDM, Ansible, etc. | All users on machine (cannot be excluded) | Org-wide coding standards, security policies, compliance requirements, data handling rules |
+| Project instructions | `./AGENTS.md` (with `./CLAUDE.md` symlink) and `.claude/rules/` | Team (version-controlled) | All team members | Project architecture, conventions, commands, trust boundaries, path-specific coding instructions |
+| User instructions | `~/.claude/CLAUDE.md` and `~/.claude/rules/` | Individual | Just you (all projects) | Personal coding preferences, tooling shortcuts, cross-project workflow habits |
+| Local instructions | `./CLAUDE.local.md` (gitignored) | Individual | Just you (this project) | Sandbox URLs, preferred test data, local dev overrides |
+| Auto memory | `~/.claude/projects/<project>/memory/` | Claude (automatic) | Just you (this project) | Corrections, debugging insights, build commands Claude discovers |
+
+When scaffolding for a team, consider which layers are already in place. If the organization deploys a managed policy, project-level instructions should complement it (not duplicate or contradict it). If team members have strong personal preferences, those belong in `~/.claude/CLAUDE.md` or `CLAUDE.local.md` -- not in the shared AGENTS.md.
+
+In monorepos with multiple teams, `claudeMdExcludes` in `.claude/settings.local.json` filters out other teams' CLAUDE.md files that add noise. Glob patterns match against absolute paths.
 
 ## When to Use
 
@@ -223,6 +265,8 @@ If `MEMORY.md` already exists:
 - When inheriting a project that lacks AI-oriented documentation
 - When converting existing documentation into the AGENTS.md structure
 - After running `/onboard` and finding that the project has no context files
+
+**How this relates to `/init`:** Claude Code's built-in `/init` command generates a starting CLAUDE.md from codebase analysis. Use `/init` for a quick bootstrap when you just need build commands and basic conventions. Use `context-scaffold` when you need complexity-level recommendations, trust boundary documentation, MCP optimization notes, `.claude/rules/` generation, and structured verification via `context-audit` and `context-align`.
 
 ## Example Output
 

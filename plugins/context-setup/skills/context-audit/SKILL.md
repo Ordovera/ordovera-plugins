@@ -25,6 +25,7 @@ Assess whether the context complexity matches the project complexity.
 - More than 10 top-level directories with no project structure section
 - Auth packages present but no auth section
 - Multiple package manager configs (monorepo) but no cascading files
+- Monorepo with multiple teams' CLAUDE.md files loading into context but no `claudeMdExcludes` in `.claude/settings.local.json` to skip irrelevant ones. Claude Code supports `claudeMdExcludes` (glob patterns against absolute paths) to filter out other teams' instructions that add noise and consume tokens.
 - More than 3 contributors (check git log) but no working style documentation
 
 **Over-engineered indicators** (context is more complex than the project):
@@ -57,11 +58,12 @@ Check which required sections are present for the current context level.
 
 **Cascading level requires:**
 
-- Project-root AGENTS.md as entry point (under ~60 lines, references context/)
+- Project-root AGENTS.md as entry point (under ~60 lines, references context/ and optionally .claude/rules/)
 - Context directory files covering at least: system overview, architecture decisions
 - Root guidance that stays durable across long sessions, with volatile implementation or migration notes moved into subordinate files
-- Subdirectory AGENTS.md files only where areas have distinct patterns
-- No content duplication between levels
+- Path-specific coding instructions in `.claude/rules/` with `paths:` frontmatter (preferred over subdirectory AGENTS.md for Claude Code users -- rules auto-load on file access and survive compaction)
+- Subdirectory AGENTS.md files only where cross-tool visibility is needed (Cursor, Windsurf, other agents) and only for areas with distinct patterns
+- No content duplication between levels or between rules files and context/ files
 
 ### 3. Format and Conventions
 
@@ -69,7 +71,7 @@ Check adherence to context engineering conventions:
 
 - `AGENTS.md` exists as the primary file (not just `CLAUDE.md` alone)
 - `CLAUDE.md` exists as a symlink to `AGENTS.md` (not a duplicate with separate content)
-- If `MEMORY.md` exists, it is treated as optional working memory rather than a second root policy file
+- No project-root `MEMORY.md` exists. Claude Code manages its own auto memory at `~/.claude/projects/<project>/memory/` -- a manually created project-root MEMORY.md conflicts with this system. If one is found, flag it (see Structural Issues below).
 - Do NOT section entries are specific and actionable:
   - Good: "Do not modify files in `src/auth/` without explicit approval"
   - Bad: "Be careful with security-sensitive code"
@@ -77,6 +79,7 @@ Check adherence to context engineering conventions:
 - Commands section entries match actual executable commands (cross-reference against `package.json` scripts, `Makefile` targets, or equivalent)
 - No template placeholders left from scaffolding (bracket syntax `[like this]` remaining in non-template files)
 - File uses markdown headings consistently (H2 for main sections)
+- `CLAUDE.local.md` awareness (informational, not required): if the project has multiple contributors, note whether `CLAUDE.local.md` is gitignored. Personal project-specific preferences (sandbox URLs, preferred test data, local dev overrides) belong in `CLAUDE.local.md`, not in the shared AGENTS.md or CLAUDE.md. If personal preferences are found in shared context files, suggest moving them to CLAUDE.local.md.
 
 ### 4. Structural Issues
 
@@ -85,10 +88,12 @@ Check for common structural problems:
 - **Duplicate subdirectory files:** Subdirectory AGENTS.md that just repeats the project root content. These add noise without value -- delete them or make them area-specific.
 - **Empty context files:** Files in `context/` that are empty or contain only headings with no content. Better to not have the file than to have an empty one.
 - **Cascading contradictions:** Rules at different levels that disagree about the same concern without a comment explaining the exception. Check these categories across all AGENTS.md files in the tree: test runner, linter/formatter, package manager, framework version, import style, and overlapping "Do NOT" boundaries. A subdirectory saying "use Jest" while the root says "use Vitest" is fine if documented -- flag it when it isn't.
-- **Missing coverage:** Directories with clearly distinct patterns (API layer, test directory, component library) that lack their own AGENTS.md when the project uses cascading.
+- **Missing coverage:** Directories with clearly distinct patterns (API layer, test directory, component library) that lack path-specific guidance. Prefer `.claude/rules/` with `paths:` frontmatter for Claude Code users; suggest subdirectory AGENTS.md only when cross-tool visibility is needed.
+- **Path-specific guidance in wrong location:** Coding instructions scoped to a directory (API conventions, component patterns, test conventions) placed in `context/` files instead of `.claude/rules/` with `paths:` frontmatter. Context files should hold reference assets (architecture, methodology, requirements); rules should hold path-specific coding instructions.
+- **Rules without path scoping:** `.claude/rules/` files that lack `paths:` frontmatter load unconditionally at session start, same as root CLAUDE.md. Flag rules files that contain path-specific guidance but no `paths:` field -- they consume tokens on every session regardless of what files are being edited.
 - **Orphaned references:** Context files that reference other context files or directories that don't exist.
 - **Overloaded root guidance:** Project-root AGENTS.md carries volatile migration notes, current sprint state, or long troubleshooting logs that should live in `context/` so the primary file survives history compaction.
-- **Misused MEMORY.md:** `MEMORY.md` exists but mostly duplicates AGENTS.md, permanent architecture notes, or contributor policy instead of short-lived working memory.
+- **Project-root MEMORY.md detected:** A manually created `MEMORY.md` in the project root conflicts with Claude Code's built-in auto memory system (`~/.claude/projects/<project>/memory/`). The built-in system is where Claude automatically saves learnings, corrections, and preferences -- it manages its own MEMORY.md index and topic files. A project-root MEMORY.md creates confusion: Claude may read both, content diverges, and users maintain a file that duplicates a built-in feature. Recommend removing it and migrating any durable content (architecture, policy, conventions) into AGENTS.md or context/ files. Volatile working notes don't need to be migrated -- Claude's auto memory handles that.
 
 ### 5. Content Quality
 
@@ -249,6 +254,6 @@ The level appropriateness check uses heuristics, not rules. A project with 50 di
 
 Section completeness is checked against the standard templates from `/context-setup:context-scaffold`. If you've intentionally omitted a section (no API to document, no auth layer), the audit will flag it -- acknowledge and move on. The goal is awareness, not compliance.
 
-`MEMORY.md` is optional. If it exists, audit it as a working-memory artifact. It should hold volatile execution context, not replace `AGENTS.md` or `context/` as the durable source of truth.
+Do not encourage users to create project-root `MEMORY.md` files. Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` where Claude automatically saves corrections, preferences, build commands, and debugging insights across sessions. The first 200 lines (or 25KB) of its MEMORY.md index load at session start; topic files load on demand. Users can browse and edit auto memory via `/memory`. A manually created project-root MEMORY.md conflicts with this system and should be flagged for removal.
 
 The audit is structural, not semantic. It can check whether an "Architecture" section exists and has content, but it can't check whether that content accurately describes your architecture. That requires human review or the code-level checks that `/context-setup:context-align` provides.

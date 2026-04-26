@@ -1,4 +1,5 @@
 context
+*.local.md
 .DS_Store
 *.sln
 node_modules

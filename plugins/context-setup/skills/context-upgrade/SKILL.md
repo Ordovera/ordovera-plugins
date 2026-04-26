@@ -13,10 +13,11 @@ Guide a transition from your current context level to the next one without losin
    - No context files found -- equivalent to running scaffold
    - Single AGENTS.md under ~60 lines -- minimal level
    - Single AGENTS.md over ~60 lines -- full level
-   - AGENTS.md + context/ directory or multiple AGENTS.md files -- cascading level
+   - AGENTS.md + context/ directory, `.claude/rules/`, or multiple AGENTS.md files -- cascading level
    - Check for `.claude/skills/` and `.claude/settings.json` hooks to assess skills/hooks layers
+   - Check for `.claude/rules/` directory and whether rules files have `paths:` frontmatter
    - Check for `.mcp.json` and equivalent MCP config to assess trust-adjacent surfaces
-   - Check for `MEMORY.md` if present so it can be reconciled rather than ignored
+   - Check for project-root `MEMORY.md` -- if present, it conflicts with Claude Code's built-in auto memory and should be flagged for removal
 
 2. **Identify the appropriate upgrade path** based on current level and project signals.
 
@@ -41,11 +42,12 @@ Read the existing AGENTS.md. Identify which full-level sections are missing. The
 
 Insert missing sections into the existing file after the current content, preserving everything already written. Do not rewrite or reorder existing sections.
 
-If `MEMORY.md` exists:
+If a project-root `MEMORY.md` exists:
 
-- keep `AGENTS.md` as the primary durable artifact
-- add a short note in the upgrade output that `MEMORY.md` should remain short-lived working memory only
-- if `MEMORY.md` appears to duplicate durable project rules, recommend moving those rules into `AGENTS.md`
+- flag it: "Found project-root MEMORY.md. This conflicts with Claude Code's built-in auto memory (`~/.claude/projects/<project>/memory/`). Claude manages its own memory automatically."
+- extract any durable content (architecture, policy, conventions) into the appropriate AGENTS.md sections being generated
+- recommend removing the project-root file after migration
+- do not preserve it as "working memory" -- Claude's built-in auto memory handles that
 
 **Trigger signals** (when minimal is no longer enough):
 
@@ -56,39 +58,52 @@ If `MEMORY.md` exists:
 
 ### Full Single File to Cascading + Context Directory
 
-Read the existing AGENTS.md. Extract sections into separate context/ files:
+Read the existing AGENTS.md. Sort extracted content into two destinations based on purpose:
+
+- **`context/`** for reference assets (architecture, methodology, requirements, system overview). These are loaded on demand by whatever needs them -- not Claude Code-specific.
+- **`.claude/rules/`** for path-specific coding instructions with `paths:` frontmatter. These auto-load in Claude Code when working with matching files and survive compaction.
 
 1. **Rewrite AGENTS.md** as the project-level entry point:
    - Keep: project description, tech stack summary, commands, code standards, Do NOT
-   - Add: a note pointing to `context/` for architectural detail
+   - Add: a note pointing to `context/` for reference assets and `.claude/rules/` for path-specific instructions
    - Add: a short trust-boundary summary when MCP, hooks, or operator-owned automation exist
    - Target: under 60 lines
 
-2. **Create context/ directory** with files extracted from the existing AGENTS.md:
+2. **Create context/ directory** with reference assets extracted from the existing AGENTS.md:
    - `system-overview.md` -- extracted from project description + any business context
    - `architecture-decisions.md` -- extracted from Architecture section, restructured as decisions with rationale
    - `operational-boundaries.md` -- extracted from trust-surface notes, hook guidance, MCP notes, or operator-owned automation guidance when present
    - `technical-requirements.md` -- extracted from any performance, security, or compliance notes (may need bracket placeholders if this wasn't in the original)
-   - `api-documentation.md` -- extracted from API Conventions section
+   - `api-documentation.md` -- extracted from API Conventions section (API surface and contracts, not coding instructions for the API layer)
    - `working-style-guide.md` -- extracted from any contribution or workflow notes (may need bracket placeholders)
 
-3. **Move volatile detail out of the root file**:
+   Additional context/ files are fine -- methodology docs, onboarding guides, research briefs. The list above is a starting set.
+
+   **Optional: @import critical context/ files.** Claude Code supports `@path/to/file` in CLAUDE.md (which is a symlink to AGENTS.md, so both files carry the line). Adding `@context/system-overview.md` to the root file guarantees it expands at launch -- no decision needed, survives compaction. The tradeoff: @imported files cost tokens every session. Recommend @importing at most 2-3 critical files (system-overview, architecture-decisions); leave optional reference docs as standalone.
+
+3. **Create `.claude/rules/` files** for path-specific coding instructions extracted from the existing AGENTS.md or subdirectory AGENTS.md files. Each rules file should have `paths:` frontmatter so it loads only when Claude works with matching files. Common candidates:
+
+   - `api-conventions.md` with `paths: ["src/api/**"]` -- error handling, response formats, middleware patterns
+   - `component-patterns.md` with `paths: ["src/components/**"]` -- component structure, state management, styling
+   - `test-conventions.md` with `paths: ["tests/**", "**/*.test.*"]` -- testing patterns, fixture approach, mocking policy
+
+   Rules without `paths:` load unconditionally (same token cost as root CLAUDE.md). Only omit `paths:` when the rule applies to all files.
+
+4. **Move volatile detail out of the root file**:
    - Current migration notes, sprint logs, troubleshooting diaries, and other compaction-hostile material should move into appropriate `context/` files or be dropped if they are stale
    - The goal is a durable entrypoint, not a smaller dump file
 
-4. **Create subdirectory AGENTS.md files** where the project has clearly distinct areas. Common candidates:
-   - API layer (error handling patterns, response formats, middleware conventions)
-   - UI/component layer (component patterns, state management, styling conventions)
-   - Test directory (testing conventions, fixture patterns, mocking approach)
+5. **Create subdirectory AGENTS.md files** only where cross-tool visibility is needed (Cursor, Windsurf, other agents that don't read `.claude/rules/`). If the guidance is Claude Code-only, prefer `.claude/rules/` with `paths:` scoping -- it auto-loads and survives compaction.
 
    Only create subdirectory files where there are genuinely different patterns. A subdirectory file that would just say "follow the root conventions" should not exist.
 
-5. **Reconcile `MEMORY.md` if present**:
-   - do not promote it to the primary root artifact
-   - preserve it only if it is serving as short-lived working memory
-   - if it duplicates durable architecture, policy, or trust-boundary guidance, recommend trimming it after the upgrade
+6. **Remove project-root `MEMORY.md` if present**:
+   - Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` -- users should not maintain a manual MEMORY.md
+   - Extract any durable content (architecture, policy, conventions) into the appropriate context/ files or .claude/rules/ files being generated
+   - Recommend deleting the project-root file after migration
+   - Note in the upgrade output: "Removed project-root MEMORY.md. Claude Code manages auto memory automatically at ~/.claude/projects/<project>/memory/. Use /memory to browse and edit."
 
-6. **Verify no content was lost** by comparing section coverage before and after.
+7. **Verify no content was lost** by comparing section coverage before and after.
 
 **Trigger signals** (when a single file is no longer enough):
 
@@ -170,13 +185,13 @@ Note: Hook registration (settings.json format, event types) is Claude Code-speci
 > **Upgrade plan:**
 >
 > 1. Rewrite AGENTS.md as a 55-line entry point (keep: description, stack, commands, standards, Do NOT, trust summary)
-> 2. Create context/ directory with 5 files extracted from current content, including operational-boundaries.md
-> 3. Move current migration notes out of the root file so the entrypoint stays durable across long sessions
-> 4. Create subdirectory AGENTS.md for src/api/ (distinct error handling and response patterns)
+> 2. Create context/ directory with 5 reference asset files extracted from current content, including operational-boundaries.md
+> 3. Create .claude/rules/ with 2 path-scoped rules: api-conventions.md (paths: src/api/**) and test-conventions.md (paths: tests/**)
+> 4. Move current migration notes out of the root file so the entrypoint stays durable across long sessions
 > 5. Create CLAUDE.md symlink (currently missing)
-> 6. Keep existing MEMORY.md only if it remains short-lived working memory rather than duplicate project policy
+> 6. Remove project-root MEMORY.md (conflicts with Claude Code's built-in auto memory; durable content migrated to context/ files)
 >
-> No content will be lost -- existing sections move to context/ files. Want to proceed?
+> No content will be lost -- existing sections move to context/ files or .claude/rules/. Want to proceed?
 
 ## Notes
 
@@ -184,8 +199,8 @@ Upgrades are additive. Each level builds on the previous one rather than replaci
 
 The trigger signals are guidelines, not thresholds. A 140-line AGENTS.md that's well-organized and covers a straightforward project doesn't need to be split into cascading files just because it's near 150 lines. Upgrade when the structure becomes a bottleneck, not when an arbitrary metric is hit.
 
-Content extraction during the full-to-cascading upgrade requires care. Sections don't always map 1:1 to context/ files. An "Architecture" section might contain both architectural decisions (goes to architecture-decisions.md) and business context (goes to system-overview.md). Read the content, don't just move headings.
+Content extraction during the full-to-cascading upgrade requires sorting by purpose, not just moving headings. An "Architecture" section might contain both architectural decisions (goes to context/architecture-decisions.md) and business context (goes to context/system-overview.md). An "API Conventions" section might contain both API surface documentation (goes to context/api-documentation.md) and coding instructions for the API layer (goes to .claude/rules/api-conventions.md with `paths:` scoping). The distinction: reference knowledge goes to context/, path-specific coding instructions go to .claude/rules/.
 
 This skill explains what each layer does, when it's valuable, and what trigger signals suggest it's time. Working hook implementations with tests are provided in `<plugin_dir>/hooks/`. The user decides how and when to install.
 
-`AGENTS.md` remains primary throughout every upgrade path. `CLAUDE.md` remains the compatibility surface. `MEMORY.md`, if present, may be preserved as optional working memory, but it should not become the durable source of project policy.
+`AGENTS.md` remains primary throughout every upgrade path. `CLAUDE.md` remains the compatibility surface (symlink). Do not create or preserve project-root `MEMORY.md` files -- Claude Code has a built-in auto memory system at `~/.claude/projects/<project>/memory/` that Claude manages automatically. Users can browse and edit auto memory via `/memory`.

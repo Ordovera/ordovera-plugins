@@ -1,6 +1,6 @@
 {
   "name": "cc-mcp-audit",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Governance posture analysis for MCP servers. Extracts tool inventories, classifies sensitivity, detects auth/logging/gate patterns, and surfaces named accountability gaps. Does not detect code-level vulnerabilities -- pair with SAST and dependency scanning for deployment decisions.",
   "type": "module",
   "bin": {
@@ -8,8 +8,15 @@
   },
   "files": [
     "dist",
-    "prompts"
+    "prompts",
+    "!dist/**/*.test.*"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ordovera/ordovera-plugins.git",
+    "directory": "packages/cc-mcp-audit"
+  },
+  "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/packages/cc-mcp-audit",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
