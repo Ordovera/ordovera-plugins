@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readCommitHash, resolveSource, extractRepoName } from "./clone.js";
+import { readCommitHash, resolveSource, extractRepoName, extractOwnerRepo } from "./clone.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -66,5 +66,33 @@ describe("extractRepoName", () => {
 
   it("returns unknown-repo for unparseable input", () => {
     expect(extractRepoName("")).toBe("unknown-repo");
+  });
+});
+
+describe("extractOwnerRepo", () => {
+  it("extracts owner--repo from standard GitHub URL", () => {
+    expect(extractOwnerRepo("https://github.com/awslabs/mcp")).toBe("awslabs--mcp");
+  });
+
+  it("extracts owner--repo from URL with trailing slash", () => {
+    expect(extractOwnerRepo("https://github.com/browsermcp/mcp/")).toBe("browsermcp--mcp");
+  });
+
+  it("produces unique dirs for repos with same name but different owners", () => {
+    const a = extractOwnerRepo("https://github.com/awslabs/mcp");
+    const b = extractOwnerRepo("https://github.com/browsermcp/mcp");
+    expect(a).not.toBe(b);
+  });
+
+  it("handles .git suffix", () => {
+    expect(extractOwnerRepo("https://github.com/owner/repo.git")).toBe("owner--repo");
+  });
+
+  it("returns null for non-GitHub URLs", () => {
+    expect(extractOwnerRepo("https://gitlab.com/owner/repo")).toBeNull();
+  });
+
+  it("returns null for unparseable input", () => {
+    expect(extractOwnerRepo("")).toBeNull();
   });
 });

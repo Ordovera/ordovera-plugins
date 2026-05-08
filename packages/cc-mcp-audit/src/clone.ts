@@ -28,9 +28,11 @@ export function resolveSource(source: string, workDir?: string): CloneResult {
 
   // Remote URL — shallow clone
   const repoName = extractRepoName(source);
+  const ownerAndRepo = extractOwnerRepo(source);
+  const dirName = ownerAndRepo ?? repoName;
   const targetDir = workDir
-    ? join(workDir, repoName)
-    : join(tmpdir(), "cc-mcp-audit", repoName);
+    ? join(workDir, dirName)
+    : join(tmpdir(), "cc-mcp-audit", dirName);
 
   if (existsSync(targetDir)) {
     return { localPath: targetDir, repoName, isTemp: !workDir };
@@ -56,6 +58,17 @@ export function extractRepoName(url: string): string {
   const cleaned = url.replace(/\/+$/, "");
   const match = cleaned.match(/\/([^/]+?)(?:\.git)?$/);
   return match?.[1] ?? "unknown-repo";
+}
+
+/**
+ * Extract "owner--repo" from a GitHub URL for unique clone directories.
+ * Returns null for non-GitHub URLs or unparseable patterns.
+ */
+export function extractOwnerRepo(url: string): string | null {
+  const cleaned = url.replace(/\/+$/, "");
+  const match = cleaned.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (!match) return null;
+  return `${match[1]}--${match[2]}`;
 }
 
 /**
