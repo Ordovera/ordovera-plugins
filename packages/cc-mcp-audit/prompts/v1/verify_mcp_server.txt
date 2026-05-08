@@ -1,0 +1,69 @@
+You are verifying whether a software repository implements an MCP (Model Context Protocol) server and extracting its tool inventory. Your output supports a governance posture study of the MCP ecosystem.
+
+You will be given code excerpts from the repository: dependency manifests, server entry points, and files that import MCP-related packages.
+
+Answer three questions. Respond with valid JSON matching the schema below.
+
+---
+
+Question 1: Is this an MCP server?
+
+An MCP server exposes tools to AI agents via the Model Context Protocol. It imports an MCP SDK (e.g., @modelcontextprotocol/sdk, mcp, fastmcp, python-sdk, mcp-go) or implements the MCP JSON-RPC protocol directly (initialize, tools/list, tools/call handlers).
+
+Things that are NOT MCP servers:
+- Libraries or SDKs that help build MCP servers (but don't expose tools themselves)
+- CLI tools or utilities that interact with MCP servers as clients
+- Template repositories with placeholder code
+- Projects that mention MCP in docs but don't implement the protocol
+
+Question 2: What tools does this server expose?
+
+Extract every tool registered with the MCP server. Look for ALL registration patterns:
+- Python: @server.tool(), @mcp.tool(), server.add_tool(), Tool(name=...), @app.tool()
+- TypeScript/JavaScript: server.tool("name", ...), .addTool({name: ...}), server.setRequestHandler(ListToolsRequestSchema, ...)
+- Go: mcp.NewTool(...), s.AddTool(...), tools.Register(...)
+- Object/dict styles: tools = [{ name: "...", ... }], TOOLS = {...}
+- Dynamic registration: loops, factory functions, class-based patterns
+- Any other pattern that defines a named callable exposed via MCP
+
+For each tool, extract:
+- name: the tool name as it appears in the MCP protocol
+- description: the tool's description string (first sentence is sufficient)
+- classification: "read" if the tool only retrieves/queries/searches data, "write" if it creates/modifies/deletes/executes/sends, "unknown" if unclear
+
+Question 3: Classification rationale
+
+For each tool classified as "write", provide a one-phrase rationale citing the specific verb or action that indicates state modification (e.g., "sends email", "deletes record", "executes shell command").
+
+---
+
+Code excerpts:
+{{REGIONS}}
+
+---
+
+Respond with ONLY a JSON object matching this schema:
+
+{
+  "isMcpServer": true | false,
+  "confidence": "high" | "medium" | "low",
+  "evidence": "1-2 sentences citing specific imports, decorators, or protocol handlers seen in the excerpts",
+  "tools": [
+    {
+      "name": "tool_name",
+      "description": "brief description",
+      "classification": "read" | "write" | "unknown",
+      "writeRationale": "why this is classified as write (null for read/unknown)",
+      "sourceFile": "path/to/file.py",
+      "sourceLine": 42
+    }
+  ],
+  "extractionNotes": "anything the human reviewer should know about extraction completeness -- e.g., 'tools appear to be dynamically generated from a config file not included in excerpts'"
+}
+
+Guidance:
+- Cite specific file:line locations from the excerpts
+- If you see tool registration but can't determine the tool name (e.g., dynamic names from a loop variable), report it with name "DYNAMIC" and note the pattern in extractionNotes
+- Prefer "unknown" classification over guessing
+- If the excerpts are insufficient to determine MCP server status, set confidence to "low" and explain in evidence
+- Return only the JSON object, no surrounding prose or code fences

@@ -4,3 +4,6 @@ context
 *.sln
 node_modules
 dist
+
+# Research data outputs (live in research/ directory, not in packages)
+research/
