@@ -1,4 +1,4 @@
-export { analyzeServer, analyzeServers } from "./analyze.js";
+export { analyzeServer, analyzeServers, analyzeServerRemote } from "./analyze.js";
 export { extractTools } from "./extract.js";
 export { scanPatterns, assessAuthArchitecture, detectFrameworkImports, hasLogAdjacentAttribution } from "./patterns.js";
 export { refineClassifications } from "./classify.js";
@@ -7,6 +7,10 @@ export { buildServerReport, buildAuditReport, formatMarkdown } from "./report.js
 export { detectGaps } from "./gaps.js";
 export { deriveIndicators } from "./indicators.js";
 export { discover, parseCuratedList, extractGitHubUrls } from "./discover.js";
+export { fetchToolsRemote, isRpcError, mapRpcToolsToExtracted } from "./rpc-client.js";
+export type { RpcToolsResult, RpcError, McpToolDefinition, McpToolAnnotations } from "./rpc-client.js";
+export { snapshotCanonicalSources, pullMcpRegistry, pullNpm, pullPypi, mergeCanonical } from "./discover-registry.js";
+export type { CanonicalSnapshot, CanonicalCandidate, RegistryEntry } from "./discover-registry.js";
 export { screenServer } from "./screen.js";
 export { toEvidence, toEvidenceBatch, resolveSourceInfo } from "./evidence.js";
 export { extractRegions, formatRegions } from "./screen-regions.js";

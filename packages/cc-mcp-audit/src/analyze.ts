@@ -19,6 +19,12 @@ import {
 import { buildServerReport, buildAuditReport } from "./report.js";
 import { detectGaps } from "./gaps.js";
 import { deriveIndicators } from "./indicators.js";
+import {
+  fetchToolsRemote,
+  mapRpcToolsToExtracted,
+  isRpcError,
+} from "./rpc-client.js";
+import type { RpcToolsResult } from "./rpc-client.js";
 
 /**
  * Detect the primary language of a repo by file extension frequency.
@@ -182,12 +188,124 @@ export function analyzeServer(
 }
 
 /**
+ * Analyze a remote MCP server via tools/list RPC.
+ *
+ * Used for servers that have no cloneable source code (remote-only).
+ * Produces a ServerReport with tool inventory but empty governance patterns
+ * (auth, logging, gates cannot be assessed without source).
+ */
+export async function analyzeServerRemote(
+  endpointUrl: string,
+  options: {
+    name?: string;
+    transport?: "streamable-http" | "sse";
+    timeoutMs?: number;
+  } = {}
+): Promise<ServerReport> {
+  const warnings: string[] = [];
+
+  const result = await fetchToolsRemote(
+    endpointUrl,
+    options.transport,
+    options.timeoutMs
+  );
+
+  if (isRpcError(result)) {
+    // Build a minimal report with the error
+    const name = options.name ?? endpointUrl;
+    warnings.push(`RPC introspection failed: ${result.message}`);
+    if (result.type === "auth-required") {
+      warnings.push("Server requires authentication -- tool inventory unavailable without credentials.");
+    }
+
+    const emptyPatterns = {
+      auth: [], logging: [], gates: [], stagedExecution: [],
+      actorAttribution: [], rateLimit: [], leastPrivilege: [],
+    };
+
+    const report = buildServerReport(
+      name, endpointUrl, "unknown", [], emptyPatterns, warnings, null
+    );
+    report.indicators = deriveIndicators(report);
+    return report;
+  }
+
+  // Success -- map tools and build report
+  const rpcResult = result as RpcToolsResult;
+  const name = options.name ?? rpcResult.serverName;
+  const tools = mapRpcToolsToExtracted(rpcResult.tools, endpointUrl);
+
+  // Check for MCP tool annotations usage
+  const annotatedCount = rpcResult.tools.filter(t => t.annotations).length;
+  if (annotatedCount > 0) {
+    warnings.push(
+      `${annotatedCount} of ${rpcResult.tools.length} tools declare MCP annotations (readOnlyHint, destructiveHint, etc.).`
+    );
+  } else if (rpcResult.tools.length > 0) {
+    warnings.push("No tools use MCP annotations -- classification based on name/description heuristics only.");
+  }
+
+  warnings.push(
+    `Remote-only analysis via ${rpcResult.transportUsed} (protocol ${rpcResult.protocolVersion}). ` +
+    "Governance patterns (auth, logging, gates) cannot be assessed without source code."
+  );
+
+  // Empty patterns since we have no source code to scan
+  const emptyPatterns = {
+    auth: [], logging: [], gates: [], stagedExecution: [],
+    actorAttribution: [], rateLimit: [], leastPrivilege: [],
+  };
+
+  const report = buildServerReport(
+    name, endpointUrl, "unknown", tools, emptyPatterns, warnings, null
+  );
+
+  // Override indicators to Indeterminate for source-dependent ones
+  report.indicators = deriveIndicators(report);
+  report.indicators.authentication = "Indeterminate";
+  report.indicators.perToolAuth = "Indeterminate";
+  report.indicators.auditLogging = "Indeterminate";
+  report.indicators.actorAttribution = "Indeterminate";
+  report.indicators.confirmationGates = "Indeterminate";
+  report.indicators.stagedExecution = "Indeterminate";
+  report.indicators.rateLimiting = "Indeterminate";
+  report.indicators.leastPrivilege = "Indeterminate";
+  report.indicators.sensitiveCapabilityIsolation = "Indeterminate";
+
+  return report;
+}
+
+/**
  * Analyze multiple MCP servers and return an aggregate report.
+ * Catches per-server errors and continues with remaining servers.
  */
 export function analyzeServers(
   inputs: McpServerInput[],
   options: AnalyzeOptions = {}
 ): AuditReport {
-  const servers = inputs.map((input) => analyzeServer(input, options));
+  const servers: ServerReport[] = [];
+
+  for (const input of inputs) {
+    try {
+      servers.push(analyzeServer(input, options));
+    } catch (err) {
+      const name = input.name ?? input.source;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Skipping ${name}: ${message}`);
+
+      // Build a minimal failed report so the server shows up in results
+      const emptyPatterns = {
+        auth: [], logging: [], gates: [], stagedExecution: [],
+        actorAttribution: [], rateLimit: [], leastPrivilege: [],
+      };
+      const failedReport = buildServerReport(
+        name, input.source, "unknown", [], emptyPatterns,
+        [`Analysis failed: ${message}`], null
+      );
+      failedReport.indicators = deriveIndicators(failedReport);
+      servers.push(failedReport);
+    }
+  }
+
   return buildAuditReport(servers);
 }

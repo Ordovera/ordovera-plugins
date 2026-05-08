@@ -25,6 +25,7 @@ export interface RegistryEntry {
   repositorySubfolder: string | null;
   transportTypes: string[];
   packageEcosystems: string[];
+  remoteEndpoints: Array<{ type: string; url: string }>;
   publishedAt: string | null;
   isLatest: boolean;
 }
@@ -68,6 +69,8 @@ export interface CanonicalCandidate {
   registryName: string | null;
   /** Most recent publish date across sources */
   latestPublishDate: string | null;
+  /** Remote endpoint URLs for RPC introspection */
+  remoteEndpoints: Array<{ type: string; url: string }>;
 }
 
 export interface CandidateSource {
@@ -160,6 +163,12 @@ export async function pullMcpRegistry(
 
       const repoUrl = srv.repository?.url || null;
 
+      // Collect remote endpoint URLs
+      const remoteEndpoints: Array<{ type: string; url: string }> = [];
+      for (const r of srv.remotes ?? []) {
+        remoteEndpoints.push({ type: r.type, url: r.url });
+      }
+
       entries.push({
         registryName: srv.name,
         description: srv.description ?? "",
@@ -168,6 +177,7 @@ export async function pullMcpRegistry(
         repositorySubfolder: srv.repository?.subfolder ?? null,
         transportTypes: [...transports],
         packageEcosystems: [...ecosystems],
+        remoteEndpoints,
         publishedAt: meta?.publishedAt ?? null,
         isLatest: meta?.isLatest ?? false,
       });
@@ -396,6 +406,7 @@ export function mergeCanonical(
         npmDownloads: 0,
         registryName: null,
         latestPublishDate: null,
+        remoteEndpoints: [],
       };
       byRepo.set(key, candidate);
       return candidate;
@@ -414,6 +425,7 @@ export function mergeCanonical(
       npmDownloads: 0,
       registryName: null,
       latestPublishDate: null,
+      remoteEndpoints: [],
     };
     byName.set(fallbackName, candidate);
     return candidate;
@@ -434,6 +446,11 @@ export function mergeCanonical(
     }
     for (const e of entry.packageEcosystems) {
       if (!candidate.packageEcosystems.includes(e)) candidate.packageEcosystems.push(e);
+    }
+    for (const ep of entry.remoteEndpoints) {
+      if (!candidate.remoteEndpoints.some(e => e.url === ep.url)) {
+        candidate.remoteEndpoints.push(ep);
+      }
     }
     updatePublishDate(candidate, entry.publishedAt);
   }
