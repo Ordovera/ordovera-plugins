@@ -14,6 +14,15 @@ export interface CloneResult {
  * Returns the local path to analyze.
  */
 export function resolveSource(source: string, workDir?: string): CloneResult {
+  // Normalize npm-style git+https:// and git+ssh:// URLs
+  if (source.startsWith("git+")) {
+    source = source.slice(4);
+  }
+  // Normalize ssh://git@... to git@... (git clone understands both)
+  if (source.startsWith("ssh://git@")) {
+    source = source.slice(6); // "ssh://git@..." -> "git@..."
+  }
+
   // Local path — just validate it exists
   if (!source.startsWith("http") && !source.startsWith("git@")) {
     if (!existsSync(source)) {

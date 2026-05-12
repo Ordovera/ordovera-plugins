@@ -72,6 +72,13 @@ export interface ExtractedTool {
   sourceFile: string;
   /** Line number of the definition */
   sourceLine: number;
+  /** MCP tool annotations extracted from source, if present */
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
 }
 
 export interface PatternMatch {

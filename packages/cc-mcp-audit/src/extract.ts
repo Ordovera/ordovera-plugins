@@ -68,7 +68,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     if (decoratorMatch) {
       const description = extractPythonDocstring(lines, i + 1);
       tools.push(
-        buildTool(decoratorMatch[1], description, file, i + 1)
+        buildTool(decoratorMatch[1], description, file, i + 1, undefined, lines)
       );
       continue;
     }
@@ -80,7 +80,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       if (funcName && defLine >= 0) {
         const description = extractPythonDocstring(lines, defLine + 1);
         tools.push(
-          buildTool(funcName, description, file, i + 1)
+          buildTool(funcName, description, file, i + 1, undefined, lines)
         );
       }
       continue;
@@ -99,7 +99,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
           const name = nameFromDecorator ?? funcName;
           const description = descFromDecorator
             ?? extractPythonDocstring(lines, defLine + 1);
-          tools.push(buildTool(name, description, file, i + 1));
+          tools.push(buildTool(name, description, file, i + 1, undefined, lines));
           i = defLine; // skip past the def line
         }
       }
@@ -115,7 +115,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
         const descFromCall = extractKwarg(body, "description");
         if (funcRef) {
           tools.push(
-            buildTool(funcRef, descFromCall ?? "", file, i + 1)
+            buildTool(funcRef, descFromCall ?? "", file, i + 1, undefined, lines)
           );
           i = closingLine;
         }
@@ -133,7 +133,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       if (window.match(/description\s*=/)) {
         const description = extractInlineDescription(lines, i);
         tools.push(
-          buildTool(addToolInlineMatch[1], description, file, i + 1)
+          buildTool(addToolInlineMatch[1], description, file, i + 1, undefined, lines)
         );
         continue;
       }
@@ -145,7 +145,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     );
     if (regMatch && !line.match(/@/)) {
       const description = extractInlineDescription(lines, i);
-      tools.push(buildTool(regMatch[1], description, file, i + 1));
+      tools.push(buildTool(regMatch[1], description, file, i + 1, undefined, lines));
       continue;
     }
 
@@ -156,7 +156,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     if (nameKwMatch) {
       const description = extractInlineDescription(lines, i);
       tools.push(
-        buildTool(nameKwMatch[1], description, file, i + 1)
+        buildTool(nameKwMatch[1], description, file, i + 1, undefined, lines)
       );
     }
 
@@ -170,7 +170,7 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       const toolName = classNameToToolName(className);
       // Find the apply() method docstring for description
       const description = extractClassApplyDocstring(lines, i);
-      tools.push(buildTool(toolName, description, file, i + 1));
+      tools.push(buildTool(toolName, description, file, i + 1, undefined, lines));
     }
   }
 
@@ -272,7 +272,7 @@ function extractTypeScriptTools(
     );
     if (toolMatch) {
       tools.push(
-        buildTool(toolMatch[1], toolMatch[2], file, i + 1)
+        buildTool(toolMatch[1], toolMatch[2], file, i + 1, undefined, lines)
       );
       continue;
     }
@@ -284,7 +284,7 @@ function extractTypeScriptTools(
     if (toolNoDescMatch && !toolMatch) {
       const description = extractInlineDescription(lines, i);
       tools.push(
-        buildTool(toolNoDescMatch[1], description, file, i + 1)
+        buildTool(toolNoDescMatch[1], description, file, i + 1, undefined, lines)
       );
       continue;
     }
@@ -297,7 +297,7 @@ function extractTypeScriptTools(
     if (registerToolMatch) {
       const description = extractInlineDescription(lines, i);
       tools.push(
-        buildTool(registerToolMatch[1], description, file, i + 1)
+        buildTool(registerToolMatch[1], description, file, i + 1, undefined, lines)
       );
       continue;
     }
@@ -308,7 +308,7 @@ function extractTypeScriptTools(
       if (nextMatch) {
         const description = extractInlineDescription(lines, i + 1);
         tools.push(
-          buildTool(nextMatch[1], description, file, i + 1)
+          buildTool(nextMatch[1], description, file, i + 1, undefined, lines)
         );
         continue;
       }
@@ -337,7 +337,7 @@ function extractTypeScriptTools(
             ).join(" ");
             if (isToolRegistrationContext(contextWindow)) {
               tools.push(
-                buildTool(objNameMatch[1], descMatch[1], file, i + 1)
+                buildTool(objNameMatch[1], descMatch[1], file, i + 1, undefined, lines)
               );
             }
           }
@@ -398,7 +398,7 @@ function extractGoTools(content: string, file: string): ExtractedTool[] {
           /Description\s*:\s*(?:t\([^)]*\)\s*,\s*)?["'`]([^"'`]+)["'`]/
         );
         const description = descMatch?.[1] ?? descBeforeMatch?.[1] ?? "";
-        tools.push(buildTool(nameFieldMatch[1], description, file, i + 1));
+        tools.push(buildTool(nameFieldMatch[1], description, file, i + 1, undefined, lines));
       }
     }
   }
@@ -456,8 +456,14 @@ function buildTool(
   name: string,
   description: string,
   file: string,
-  line: number
+  line: number,
+  annotations?: ExtractedTool["annotations"],
+  sourceLines?: string[]
 ): ExtractedTool {
+  // Auto-extract annotations from source if not provided explicitly
+  if (!annotations && sourceLines) {
+    annotations = extractAnnotations(sourceLines, line - 1); // line is 1-based, array is 0-based
+  }
   const lowerName = name.toLowerCase();
   const lowerDesc = description.toLowerCase();
   const combined = `${lowerName} ${lowerDesc}`;
@@ -470,7 +476,13 @@ function buildTool(
   );
 
   let classification: ExtractedTool["classification"] = "unknown";
-  if (sensitiveKeywords.length > 0 && readSignals.length === 0) {
+
+  // Prefer MCP annotations when available (author-declared intent)
+  if (annotations?.readOnlyHint === true) {
+    classification = "read";
+  } else if (annotations?.readOnlyHint === false || annotations?.destructiveHint === true) {
+    classification = "write";
+  } else if (sensitiveKeywords.length > 0 && readSignals.length === 0) {
     classification = "write";
   } else if (readSignals.length > 0 && sensitiveKeywords.length === 0) {
     classification = "read";
@@ -480,7 +492,7 @@ function buildTool(
     classification = "read";
   }
 
-  return {
+  const tool: ExtractedTool = {
     name,
     description,
     classification,
@@ -488,6 +500,12 @@ function buildTool(
     sourceFile: file,
     sourceLine: line,
   };
+
+  if (annotations) {
+    tool.annotations = annotations;
+  }
+
+  return tool;
 }
 
 /**
@@ -510,6 +528,63 @@ function findDefAfterDecorators(
     break;
   }
   return { funcName: undefined, defLine: -1 };
+}
+
+/**
+ * Scan lines around a tool definition for MCP annotation hints.
+ * Looks for readOnlyHint, destructiveHint, idempotentHint, openWorldHint
+ * in both camelCase (TS/JS) and snake_case (Python) within a window
+ * of lines before and after the tool definition line.
+ */
+function extractAnnotations(
+  lines: string[],
+  toolLine: number,
+  windowBefore = 10,
+  windowAfter = 5
+): ExtractedTool["annotations"] | undefined {
+  // Scan forward from the tool line to find annotations in this tool's block.
+  // Also scan a few lines backward (within the same tool's decorator/definition),
+  // but stop if we hit another tool's definition.
+  let start = toolLine;
+  for (let j = toolLine - 1; j >= Math.max(0, toolLine - windowBefore); j--) {
+    const line = lines[j];
+    // Stop at blank line (tool definitions are typically separated by blank lines)
+    if (line.trim() === "") break;
+    // Stop at another tool registration (not the current one)
+    if (j < toolLine - 1 && line.match(/@\w+\.tool\(|\.tool\(\s*["']|\.registerTool\(|mcp\.NewTool|\.AddTool\(|\.add_tool\(/)) {
+      break;
+    }
+    start = j;
+  }
+  const end = Math.min(lines.length, toolLine + windowAfter);
+  const window = lines.slice(start, end).join("\n");
+
+  // Check if any annotation hint appears in the window
+  if (
+    !window.match(/readOnlyHint|read_only_hint|destructiveHint|destructive_hint|idempotentHint|idempotent_hint|openWorldHint|open_world_hint/i)
+  ) {
+    return undefined;
+  }
+
+  const annotations: ExtractedTool["annotations"] = {};
+
+  const readOnly = window.match(/readOnlyHint\s*[:=]\s*(true|false|True|False)/i)
+    ?? window.match(/read_only_hint\s*[:=]\s*(true|false|True|False)/i);
+  if (readOnly) annotations.readOnlyHint = readOnly[1].toLowerCase() === "true";
+
+  const destructive = window.match(/destructiveHint\s*[:=]\s*(true|false|True|False)/i)
+    ?? window.match(/destructive_hint\s*[:=]\s*(true|false|True|False)/i);
+  if (destructive) annotations.destructiveHint = destructive[1].toLowerCase() === "true";
+
+  const idempotent = window.match(/idempotentHint\s*[:=]\s*(true|false|True|False)/i)
+    ?? window.match(/idempotent_hint\s*[:=]\s*(true|false|True|False)/i);
+  if (idempotent) annotations.idempotentHint = idempotent[1].toLowerCase() === "true";
+
+  const openWorld = window.match(/openWorldHint\s*[:=]\s*(true|false|True|False)/i)
+    ?? window.match(/open_world_hint\s*[:=]\s*(true|false|True|False)/i);
+  if (openWorld) annotations.openWorldHint = openWorld[1].toLowerCase() === "true";
+
+  return Object.keys(annotations).length > 0 ? annotations : undefined;
 }
 
 function extractPythonDocstring(
