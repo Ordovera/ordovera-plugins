@@ -38,12 +38,12 @@ export function refineClassifications(
     // and the description suggests a safe/read-only context
     if (
       tool.classification === "write" &&
-      tool.sensitiveKeywords.length === 1 &&
-      tool.sensitiveKeywords[0] === "execute" &&
+      tool.writeSignals.length === 1 &&
+      tool.writeSignals[0] === "execute" &&
       SAFE_EXECUTE_CONTEXTS.some((p) => p.test(tool.description))
     ) {
       refined.classification = "read";
-      refined.sensitiveKeywords = [];
+      refined.writeSignals = [];
     }
 
     // Upgrade "read" to "write" if description suggests dangerous context
@@ -52,8 +52,8 @@ export function refineClassifications(
       DANGEROUS_READ_CONTEXTS.some((p) => p.test(tool.description))
     ) {
       refined.classification = "write";
-      refined.sensitiveKeywords = [
-        ...tool.sensitiveKeywords,
+      refined.writeSignals = [
+        ...tool.writeSignals,
         "full-access",
       ];
     }

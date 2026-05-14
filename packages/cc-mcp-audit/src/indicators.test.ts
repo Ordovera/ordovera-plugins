@@ -34,6 +34,7 @@ function makeReport(overrides: Partial<ServerReport> = {}): ServerReport {
       auditLogging: "Absent",
       actorAttribution: "Absent", rateLimiting: "Absent",
       sensitiveCapabilityIsolation: "Absent",
+      sensitiveReadProtection: "Indeterminate",
       selfModificationPrevention: null,
       subAgentAuthorityConstraints: null,
       permissionBoundaryEnforcement: null,
@@ -49,7 +50,10 @@ function makeTool(overrides: Partial<ExtractedTool>): ExtractedTool {
     name: "t",
     description: "",
     classification: "unknown",
-    sensitiveKeywords: [],
+    writeSignals: [],
+    sensitivity: "non-sensitive",
+    sensitivityCategory: null,
+    sensitivitySignals: [],
     sourceFile: "f.py",
     sourceLine: 1,
     ...overrides,
@@ -293,6 +297,49 @@ describe("deriveIndicators", () => {
         },
       });
       expect(deriveIndicators(r).actorAttribution).toBe("Absent");
+    });
+  });
+
+  describe("sensitiveReadProtection", () => {
+    it("Indeterminate when no tools extracted", () => {
+      expect(deriveIndicators(makeReport()).sensitiveReadProtection).toBe("Indeterminate");
+    });
+
+    it("Indeterminate when no sensitive-read tools exist", () => {
+      const r = makeReport({
+        tools: [
+          makeTool({ name: "list_items", classification: "read", sensitivity: "non-sensitive" }),
+          makeTool({ name: "delete_item", classification: "write", sensitivity: "sensitive", sensitivityCategory: "integrity", sensitivitySignals: ["delete_account"] }),
+        ],
+      });
+      expect(deriveIndicators(r).sensitiveReadProtection).toBe("Indeterminate");
+    });
+
+    it("Present when sensitive reads exist and server has auth", () => {
+      const r = makeReport({
+        tools: [
+          makeTool({ name: "get_patient_data", classification: "read", sensitivity: "sensitive", sensitivityCategory: "confidentiality", sensitivitySignals: ["patient"] }),
+        ],
+        flags: { ...makeReport().flags, hasAuth: true },
+      });
+      expect(deriveIndicators(r).sensitiveReadProtection).toBe("Present");
+    });
+
+    it("Absent when sensitive reads exist but no auth", () => {
+      const r = makeReport({
+        tools: [
+          makeTool({ name: "get_api_key", classification: "read", sensitivity: "sensitive", sensitivityCategory: "confidentiality", sensitivitySignals: ["api_key"] }),
+        ],
+      });
+      expect(deriveIndicators(r).sensitiveReadProtection).toBe("Absent");
+    });
+
+    it("Indeterminate when extraction was incomplete (no tools)", () => {
+      const r = makeReport({
+        tools: [],
+        warnings: ["MCP framework detected but no tools extracted"],
+      });
+      expect(deriveIndicators(r).sensitiveReadProtection).toBe("Indeterminate");
     });
   });
 

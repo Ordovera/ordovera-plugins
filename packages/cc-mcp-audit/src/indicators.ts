@@ -31,6 +31,7 @@ export function deriveIndicators(report: ServerReport): CodingIndicators {
       report,
       extractionIncomplete
     ),
+    sensitiveReadProtection: deriveSensitiveReadProtection(report, extractionIncomplete),
     // Domain 5 indicators are always null -- populated by human review outside
     // the tool. The LLM screening pass (--llm-screen) does not set these; it
     // writes to screeningSignals instead.
@@ -188,6 +189,28 @@ function deriveSensitiveIsolation(
 
   // Mixed -- some separation but not clean
   return "Indeterminate";
+}
+
+/**
+ * Whether sensitive-read tools have auth or access controls.
+ *
+ * Present: sensitive reads exist AND server has authentication.
+ * Absent: sensitive reads exist with NO auth.
+ * Indeterminate: no tools extracted, or no sensitive-read tools.
+ */
+function deriveSensitiveReadProtection(
+  report: ServerReport,
+  extractionIncomplete: boolean
+): IndicatorValue {
+  if (extractionIncomplete) return "Indeterminate";
+
+  const sensitiveReads = report.tools.filter(
+    (t) => t.classification === "read" && t.sensitivity === "sensitive"
+  );
+
+  if (sensitiveReads.length === 0) return "Indeterminate";
+
+  return report.flags.hasAuth ? "Present" : "Absent";
 }
 
 function extractPrefix(toolName: string): string | null {

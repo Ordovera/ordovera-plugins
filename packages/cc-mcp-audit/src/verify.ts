@@ -428,7 +428,10 @@ export function verifiedToolsToExtracted(tools: VerifiedTool[]): ExtractedTool[]
     name: t.name,
     description: t.description,
     classification: t.classification,
-    sensitiveKeywords: t.writeRationale ? [t.writeRationale] : [],
+    writeSignals: t.writeRationale ? [t.writeRationale] : [],
+    sensitivity: "unknown" as const,
+    sensitivityCategory: null,
+    sensitivitySignals: [],
     sourceFile: t.sourceFile || "[llm-extracted]",
     sourceLine: t.sourceLine || 0,
   }));

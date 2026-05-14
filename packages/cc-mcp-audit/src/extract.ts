@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, extname, relative, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { ExtractedTool } from "./types.js";
+import type { ExtractedTool, SensitivityCategory } from "./types.js";
 
 const WRITE_KEYWORDS = [
   // CRUD / API
@@ -22,6 +22,48 @@ const READ_KEYWORDS = [
   // Infrastructure / observability
   "audit", "scan", "diagnose", "score", "monitor", "overview", "export",
   "watch", "health", "verify", "analyze", "collect", "log",
+];
+
+// Sensitivity: data-domain signals (primarily confidentiality)
+// These must be specific enough that a single match is sufficient.
+const SENSITIVE_DATA_KEYWORDS = [
+  // PII / personal data
+  "patient", "medical", "health_record", "diagnosis", "prescription",
+  "ssn", "social_security", "passport", "driver_license",
+  "credit_score", "credit_report",
+  "salary", "compensation", "payroll", "bank_account",
+  // Credentials / secrets
+  "credential", "password", "secret", "api_key", "private_key",
+  "certificate", "oauth_token", "bearer_token", "access_token",
+  "connection_string", "database_url",
+  // Legal / regulatory
+  "hipaa", "pci", "ferpa", "gdpr",
+];
+
+// Sensitivity: action-scope signals (primarily autonomy/integrity)
+const SENSITIVE_ACTION_KEYWORDS = [
+  // Financial transactions
+  "payment", "transfer_funds", "charge", "refund", "invoice",
+  "purchase", "billing",
+  // Code execution
+  "execute_code", "eval", "run_code", "run_shell", "run_command",
+  "shell_exec", "subprocess", "spawn_process",
+  // Infrastructure lifecycle
+  "destroy_instance", "terminate_instance", "drop_database",
+  "delete_account", "revoke_access",
+];
+
+// Context-dependent keywords: sensitive only when combined with
+// qualifying terms (prevents false positives from generic config/admin tools)
+const SENSITIVE_CONTEXT_PAIRS: Array<[string, string[]]> = [
+  // "config" is sensitive when combined with these qualifiers
+  ["config", ["secret", "credential", "password", "key", "token", "database", "connection"]],
+  // "admin" is sensitive when combined with access/permission concepts
+  ["admin", ["permission", "role", "access", "privilege", "user", "account"]],
+  // "environment" is sensitive when combined with secrets
+  ["environment", ["variable", "secret", "key", "token"]],
+  // "session" is sensitive when combined with identity
+  ["session", ["token", "credential", "identity", "auth"]],
 ];
 
 /**
@@ -468,35 +510,42 @@ function buildTool(
   const lowerDesc = description.toLowerCase();
   const combined = `${lowerName} ${lowerDesc}`;
 
-  const sensitiveKeywords = WRITE_KEYWORDS.filter(
+  const writeSignals = WRITE_KEYWORDS.filter(
     (kw) => combined.includes(kw)
   );
   const readSignals = READ_KEYWORDS.filter(
     (kw) => combined.includes(kw)
   );
 
+  // --- Read/write classification (persistent-effect axis) ---
   let classification: ExtractedTool["classification"] = "unknown";
 
-  // Prefer MCP annotations when available (author-declared intent)
   if (annotations?.readOnlyHint === true) {
     classification = "read";
   } else if (annotations?.readOnlyHint === false || annotations?.destructiveHint === true) {
     classification = "write";
-  } else if (sensitiveKeywords.length > 0 && readSignals.length === 0) {
+  } else if (writeSignals.length > 0 && readSignals.length === 0) {
     classification = "write";
-  } else if (readSignals.length > 0 && sensitiveKeywords.length === 0) {
+  } else if (readSignals.length > 0 && writeSignals.length === 0) {
     classification = "read";
-  } else if (sensitiveKeywords.length > readSignals.length) {
+  } else if (writeSignals.length > readSignals.length) {
     classification = "write";
   } else if (readSignals.length > 0) {
     classification = "read";
   }
 
+  // --- Sensitivity classification (governance-relevance axis) ---
+  const { sensitivity, sensitivityCategory, sensitivitySignals } =
+    classifySensitivity(combined, annotations);
+
   const tool: ExtractedTool = {
     name,
     description,
     classification,
-    sensitiveKeywords,
+    writeSignals,
+    sensitivity,
+    sensitivityCategory,
+    sensitivitySignals,
     sourceFile: file,
     sourceLine: line,
   };
@@ -507,6 +556,107 @@ function buildTool(
 
   return tool;
 }
+
+/**
+ * Classify tool sensitivity based on name+description keywords and annotations.
+ *
+ * A single specific keyword match is sufficient (per design decision).
+ * Context-dependent keywords require a qualifying term nearby.
+ * openWorldHint can promote to sensitive but never demote.
+ */
+/**
+ * Test whether a keyword appears in text at a word boundary.
+ * Word boundaries are: start/end of string, space, underscore, hyphen, dot,
+ * colon, slash, or camelCase transition (lowercase->uppercase).
+ *
+ * This prevents "secret" matching inside "secretary" or "medical" matching
+ * inside "nonmedical". Tool names use snake_case, kebab-case, dot.notation,
+ * and occasionally camelCase, so all of these are valid boundaries.
+ */
+function matchesAtBoundary(text: string, keyword: string): boolean {
+  let pos = 0;
+  while (pos <= text.length - keyword.length) {
+    const idx = text.indexOf(keyword, pos);
+    if (idx === -1) return false;
+
+    const before = idx === 0 ? "" : text[idx - 1];
+    const after = idx + keyword.length >= text.length ? "" : text[idx + keyword.length];
+
+    const boundaryChars = /[\s_\-.:\/]/;
+    const leftOk = idx === 0 || boundaryChars.test(before)
+      || (before === before.toLowerCase() && keyword[0] === keyword[0].toUpperCase());
+    const rightOk = idx + keyword.length >= text.length || boundaryChars.test(after)
+      || (keyword[keyword.length - 1] === keyword[keyword.length - 1].toLowerCase()
+          && after === after.toUpperCase());
+
+    if (leftOk && rightOk) return true;
+    pos = idx + 1;
+  }
+  return false;
+}
+
+function classifySensitivity(
+  combined: string,
+  annotations?: ExtractedTool["annotations"]
+): {
+  sensitivity: ExtractedTool["sensitivity"];
+  sensitivityCategory: SensitivityCategory | null;
+  sensitivitySignals: string[];
+} {
+  const signals: string[] = [];
+  let category: SensitivityCategory | null = null;
+
+  // Check data-domain keywords (confidentiality)
+  for (const kw of SENSITIVE_DATA_KEYWORDS) {
+    if (matchesAtBoundary(combined, kw)) {
+      signals.push(kw);
+      if (!category) category = "confidentiality";
+    }
+  }
+
+  // Check action-scope keywords (autonomy/integrity)
+  for (const kw of SENSITIVE_ACTION_KEYWORDS) {
+    if (matchesAtBoundary(combined, kw)) {
+      signals.push(kw);
+      if (!category) {
+        // Financial/communication actions -> autonomy; code exec -> integrity
+        if (kw.includes("exec") || kw.includes("shell") || kw.includes("spawn") || kw.includes("eval")) {
+          category = "integrity";
+        } else {
+          category = "autonomy";
+        }
+      }
+    }
+  }
+
+  // Check context-dependent pairs (both base and qualifier must be present)
+  for (const [base, qualifiers] of SENSITIVE_CONTEXT_PAIRS) {
+    if (matchesAtBoundary(combined, base)) {
+      for (const q of qualifiers) {
+        if (matchesAtBoundary(combined, q)) {
+          signals.push(`${base}+${q}`);
+          if (!category) category = "confidentiality";
+          break;
+        }
+      }
+    }
+  }
+
+  // openWorldHint can promote to sensitive (one-way: never used to demote)
+  if (annotations?.openWorldHint === true && signals.length === 0) {
+    // Weak signal alone -- don't classify as sensitive without other evidence
+    // But if there are already signals, it reinforces them (no-op since already sensitive)
+  }
+
+  if (signals.length > 0) {
+    return { sensitivity: "sensitive", sensitivityCategory: category, sensitivitySignals: signals };
+  }
+
+  return { sensitivity: "non-sensitive", sensitivityCategory: null, sensitivitySignals: [] };
+}
+
+// Export for direct unit testing
+export { classifySensitivity as _classifySensitivity, matchesAtBoundary as _matchesAtBoundary };
 
 /**
  * Starting from a given line, skip past any stacked decorators (@...)

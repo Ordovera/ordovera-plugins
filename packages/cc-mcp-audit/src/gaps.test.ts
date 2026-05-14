@@ -8,7 +8,10 @@ function makeTool(overrides: Partial<ExtractedTool>): ExtractedTool {
     name: "test_tool",
     description: "",
     classification: "unknown",
-    sensitiveKeywords: [],
+    writeSignals: [],
+    sensitivity: "non-sensitive",
+    sensitivityCategory: null,
+    sensitivitySignals: [],
     sourceFile: "server.py",
     sourceLine: 1,
     ...overrides,
@@ -207,5 +210,113 @@ describe("detectGaps", () => {
 
     const gaps = detectGaps(tools, patterns, "none");
     expect(gaps).toEqual([]);
+  });
+
+  it("detects sensitive-read-without-auth when sensitive reads lack auth", () => {
+    const tools = [
+      makeTool({
+        name: "get_patient_records",
+        classification: "read",
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["patient"],
+        sourceFile: "tools.py",
+      }),
+    ];
+    const patterns = makePatterns();
+
+    const gaps = detectGaps(tools, patterns, "none");
+    const gap = gaps.find((g) => g.pattern === "sensitive-read-without-auth");
+    expect(gap).toBeDefined();
+    expect(gap!.confidence).toBe("high");
+    expect(gap!.instances[0].tool).toBe("get_patient_records");
+  });
+
+  it("does not flag sensitive-read-without-auth when auth exists", () => {
+    const tools = [
+      makeTool({
+        name: "get_patient_records",
+        classification: "read",
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["patient"],
+      }),
+    ];
+    const patterns = makePatterns({
+      auth: [{ type: "auth", match: "Bearer", file: "auth.py", line: 1 }],
+    });
+
+    const gaps = detectGaps(tools, patterns, "global");
+    expect(gaps.find((g) => g.pattern === "sensitive-read-without-auth")).toBeUndefined();
+  });
+
+  it("does not flag sensitive-read-without-auth for non-sensitive reads", () => {
+    const tools = [
+      makeTool({
+        name: "list_items",
+        classification: "read",
+        sensitivity: "non-sensitive",
+      }),
+    ];
+    const patterns = makePatterns();
+
+    const gaps = detectGaps(tools, patterns, "none");
+    expect(gaps.find((g) => g.pattern === "sensitive-read-without-auth")).toBeUndefined();
+  });
+
+  it("detects sensitive-read-without-logging when sensitive reads lack logging", () => {
+    const tools = [
+      makeTool({
+        name: "get_api_key",
+        classification: "read",
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["api_key"],
+        sourceFile: "secrets.py",
+      }),
+    ];
+    const patterns = makePatterns({
+      logging: [{ type: "logging", match: "logger.info", file: "other.py", line: 5 }],
+    });
+
+    const gaps = detectGaps(tools, patterns, "none");
+    const gap = gaps.find((g) => g.pattern === "sensitive-read-without-logging");
+    expect(gap).toBeDefined();
+    expect(gap!.instances[0].tool).toBe("get_api_key");
+  });
+
+  it("does not flag sensitive-read-without-logging when logging is co-located", () => {
+    const tools = [
+      makeTool({
+        name: "get_api_key",
+        classification: "read",
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["api_key"],
+        sourceFile: "secrets.py",
+      }),
+    ];
+    const patterns = makePatterns({
+      logging: [{ type: "logging", match: "logger.info", file: "secrets.py", line: 10 }],
+    });
+
+    const gaps = detectGaps(tools, patterns, "none");
+    expect(gaps.find((g) => g.pattern === "sensitive-read-without-logging")).toBeUndefined();
+  });
+
+  it("does not flag sensitive-read-without-logging for write tools", () => {
+    const tools = [
+      makeTool({
+        name: "delete_patient",
+        classification: "write",
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["patient"],
+      }),
+    ];
+    const patterns = makePatterns();
+
+    const gaps = detectGaps(tools, patterns, "none");
+    expect(gaps.find((g) => g.pattern === "sensitive-read-without-logging")).toBeUndefined();
   });
 });

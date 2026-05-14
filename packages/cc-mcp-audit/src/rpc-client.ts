@@ -427,7 +427,10 @@ export function mapRpcToolsToExtracted(tools: McpToolDefinition[], endpointUrl: 
       name: tool.name,
       description: tool.description ?? "",
       classification,
-      sensitiveKeywords: [],
+      writeSignals: [],
+      sensitivity: "unknown" as const,
+      sensitivityCategory: null,
+      sensitivitySignals: [],
       sourceFile: `[remote] ${endpointUrl}`,
       sourceLine: 0,
     };

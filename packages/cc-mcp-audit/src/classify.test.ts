@@ -9,7 +9,10 @@ function makeTool(
     name: "test_tool",
     description: "",
     classification: "unknown",
-    sensitiveKeywords: [],
+    writeSignals: [],
+    sensitivity: "non-sensitive",
+    sensitivityCategory: null,
+    sensitivitySignals: [],
     sourceFile: "test.py",
     sourceLine: 1,
     ...overrides,
@@ -23,13 +26,13 @@ describe("refineClassifications", () => {
         name: "execute_query",
         description: "Execute a read-only SQL query",
         classification: "write",
-        sensitiveKeywords: ["execute"],
+        writeSignals: ["execute"],
       }),
     ];
 
     const refined = refineClassifications(tools);
     expect(refined[0].classification).toBe("read");
-    expect(refined[0].sensitiveKeywords).not.toContain("execute");
+    expect(refined[0].writeSignals).not.toContain("execute");
   });
 
   it("downgrades write to read for safe/select/query contexts", () => {
@@ -44,7 +47,7 @@ describe("refineClassifications", () => {
         makeTool({
           classification: "write",
           description,
-          sensitiveKeywords: ["execute"],
+          writeSignals: ["execute"],
         }),
       ];
       const refined = refineClassifications(tools);
@@ -58,13 +61,13 @@ describe("refineClassifications", () => {
         name: "query_db",
         description: "Query database with full access",
         classification: "read",
-        sensitiveKeywords: [],
+        writeSignals: [],
       }),
     ];
 
     const refined = refineClassifications(tools);
     expect(refined[0].classification).toBe("write");
-    expect(refined[0].sensitiveKeywords).toContain("full-access");
+    expect(refined[0].writeSignals).toContain("full-access");
   });
 
   it("does not modify correctly classified tools", () => {
@@ -78,7 +81,7 @@ describe("refineClassifications", () => {
         name: "delete_item",
         description: "Delete an item permanently",
         classification: "write",
-        sensitiveKeywords: ["delete"],
+        writeSignals: ["delete"],
       }),
     ];
 
@@ -87,12 +90,34 @@ describe("refineClassifications", () => {
     expect(refined[1].classification).toBe("write");
   });
 
+  it("preserves sensitivity fields when reclassifying read/write", () => {
+    const tools = [
+      makeTool({
+        name: "execute_query",
+        description: "Execute a read-only SQL query on patient database",
+        classification: "write",
+        writeSignals: ["execute"],
+        sensitivity: "sensitive",
+        sensitivityCategory: "confidentiality",
+        sensitivitySignals: ["patient"],
+      }),
+    ];
+
+    const refined = refineClassifications(tools);
+    // Classification changed from write -> read
+    expect(refined[0].classification).toBe("read");
+    // Sensitivity preserved (orthogonal axis)
+    expect(refined[0].sensitivity).toBe("sensitive");
+    expect(refined[0].sensitivityCategory).toBe("confidentiality");
+    expect(refined[0].sensitivitySignals).toContain("patient");
+  });
+
   it("does not mutate the original array", () => {
     const tools = [
       makeTool({
         classification: "write",
         description: "Execute a read-only query",
-        sensitiveKeywords: ["execute"],
+        writeSignals: ["execute"],
       }),
     ];
 

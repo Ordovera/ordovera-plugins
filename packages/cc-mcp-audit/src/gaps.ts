@@ -153,5 +153,45 @@ export function detectGaps(
     });
   }
 
+  // 6. Sensitive-read tools without auth: tools that expose protected data
+  //    with no authentication mechanism in the server
+  const sensitiveReads = tools.filter(
+    (t) => t.classification === "read" && t.sensitivity === "sensitive"
+  );
+  if (sensitiveReads.length > 0 && authArchitecture === "none") {
+    gaps.push({
+      pattern: "sensitive-read-without-auth",
+      confidence: "high",
+      instances: sensitiveReads.map((t) => ({
+        tool: t.name,
+        file: t.sourceFile,
+        line: t.sourceLine,
+      })),
+      reviewNote:
+        "These tools access sensitive data (credentials, PII, financial records) " +
+        "without any authentication mechanism. Any connected client can read protected information.",
+    });
+  }
+
+  // 7. Sensitive-read tools without logging: sensitive data access
+  //    with no audit trail in the tool's source file
+  const sensitiveReadsUnlogged = sensitiveReads.filter(
+    (t) => !logFiles.has(t.sourceFile)
+  );
+  if (sensitiveReadsUnlogged.length > 0) {
+    gaps.push({
+      pattern: "sensitive-read-without-logging",
+      confidence: "high",
+      instances: sensitiveReadsUnlogged.map((t) => ({
+        tool: t.name,
+        file: t.sourceFile,
+        line: t.sourceLine,
+      })),
+      reviewNote:
+        "Sensitive data access is not logged in these tools' source files. " +
+        "There is no audit trail for who accessed protected information or when.",
+    });
+  }
+
   return gaps;
 }

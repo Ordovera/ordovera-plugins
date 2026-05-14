@@ -51,7 +51,7 @@ describe("extractTools", () => {
 
     it("detects sensitive keywords", () => {
       const deleteItem = tools.find((t) => t.name === "delete_item");
-      expect(deleteItem?.sensitiveKeywords).toContain("delete");
+      expect(deleteItem?.writeSignals).toContain("delete");
     });
 
     it("includes source file and line info", () => {
@@ -279,7 +279,7 @@ describe("extractTools", () => {
       expect(execSql?.description).toContain("Execute any SQL query");
       // "execute" (write) + "query" (read) in description -- tied signals,
       // classifier defaults to read per existing tiebreak logic
-      expect(execSql?.sensitiveKeywords).toContain("execute");
+      expect(execSql?.writeSignals).toContain("execute");
     });
 
     it("includes source file and line info", () => {
@@ -677,7 +677,7 @@ describe("parseRuntimeOutput", () => {
     ]);
     const { tools } = parseRuntimeOutput(json, "pkg");
     expect(tools[0].classification).toBe("write");
-    expect(tools[0].sensitiveKeywords).toContain("delete");
+    expect(tools[0].writeSignals).toContain("delete");
     expect(tools[1].classification).toBe("read");
   });
 

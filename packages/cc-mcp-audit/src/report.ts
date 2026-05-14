@@ -53,6 +53,7 @@ export function buildServerReport(
       actorAttribution: "Absent",
       rateLimiting: "Absent",
       sensitiveCapabilityIsolation: "Absent",
+      sensitiveReadProtection: "Indeterminate",
       selfModificationPrevention: null,
       subAgentAuthorityConstraints: null,
       permissionBoundaryEnforcement: null,
@@ -202,12 +203,12 @@ function formatServerSection(server: ServerReport): string[] {
   lines.push("### Tool Inventory");
   lines.push("");
   lines.push(
-    "| Tool | Classification | Sensitive Keywords |"
+    "| Tool | Classification | Sensitivity | Write Signals |"
   );
-  lines.push("|------|---------------|-------------------|");
+  lines.push("|------|---------------|-------------|---------------|");
   for (const tool of server.tools) {
     lines.push(
-      `| ${tool.name} | ${tool.classification} | ${tool.sensitiveKeywords.join(", ") || "none"} |`
+      `| ${tool.name} | ${tool.classification} | ${tool.sensitivity} | ${tool.writeSignals.join(", ") || "none"} |`
     );
   }
   lines.push("");

@@ -59,15 +59,28 @@ export interface DiscoveryFilters {
   exclude?: string[];
 }
 
+export type SensitivityCategory =
+  | "confidentiality"
+  | "integrity"
+  | "availability"
+  | "autonomy"
+  | "accountability";
+
 export interface ExtractedTool {
   /** Tool name as registered in the MCP server */
   name: string;
   /** Tool description from the server definition */
   description: string;
-  /** Read or write classification */
+  /** Read or write classification (persistent-effect axis) */
   classification: "read" | "write" | "unknown";
-  /** Keywords that triggered sensitivity flags */
-  sensitiveKeywords: string[];
+  /** Keywords that triggered write classification */
+  writeSignals: string[];
+  /** Sensitivity classification (governance-relevance axis) */
+  sensitivity: "sensitive" | "non-sensitive" | "unknown";
+  /** Primary sensitivity category, if sensitive */
+  sensitivityCategory: SensitivityCategory | null;
+  /** Keywords/patterns that triggered sensitivity */
+  sensitivitySignals: string[];
   /** File path where the tool was defined */
   sourceFile: string;
   /** Line number of the definition */
@@ -97,7 +110,9 @@ export type AccountabilityGapPattern =
   | "auth-without-actor-logging"
   | "global-auth-over-sensitive-tools"
   | "logging-without-attribution"
-  | "destructive-without-audit-trail";
+  | "destructive-without-audit-trail"
+  | "sensitive-read-without-auth"
+  | "sensitive-read-without-logging";
 
 export interface AccountabilityGap {
   /** Named pattern this gap represents */
@@ -226,6 +241,8 @@ export interface CodingIndicators {
   rateLimiting: IndicatorValue;
   /** Sensitive capability isolation via file or namespace structure */
   sensitiveCapabilityIsolation: IndicatorValue;
+  /** Whether sensitive-read tools have auth or access controls */
+  sensitiveReadProtection: IndicatorValue;
   /** Domain 5: coded by human review. Null until populated. */
   selfModificationPrevention: IndicatorValue | null;
   /** Domain 5: coded by human review. Null until populated. */
