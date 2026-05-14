@@ -1,6 +1,6 @@
 # mcp-audit
 
-MCP server governance posture analysis. Surfaces accountability gaps -- ungated writes, auth without attribution, destructive tools without audit trails -- across MCP server ecosystems. Combines automated static analysis (via `cc-mcp-audit`) with interpretive review.
+MCP server governance posture analysis. Surfaces accountability gaps -- ungated writes, auth without attribution, sensitive reads without logging, destructive tools without audit trails -- across MCP server ecosystems. Combines automated static analysis (via `cc-mcp-audit`) with interpretive review.
 
 This plugin assesses governance posture, not vulnerability surface. It does not detect path traversal, SQL injection, prompt injection, or dependency CVEs. For deployment decisions, pair with `/top10-scan:sast-scan` and `/top10-scan:sca-scan`.
 
@@ -13,15 +13,19 @@ This plugin assesses governance posture, not vulnerability surface. It does not 
 
 ## Prerequisites
 
-The `cc-mcp-audit` CLI must be available. It ships as a TypeScript package in this monorepo under [`packages/cc-mcp-audit/`](../../packages/cc-mcp-audit/).
-
-From the repo root:
+The `cc-mcp-audit` CLI must be available:
 
 ```bash
-cd packages/cc-mcp-audit && npm install && npm run build
+npm install -g cc-mcp-audit
 ```
 
-Verify with `npx cc-mcp-audit --help`. See the [cc-mcp-audit README](../../packages/cc-mcp-audit/README.md) for full CLI usage.
+Or run via npx (installs on first use):
+
+```bash
+npx cc-mcp-audit --help
+```
+
+See the [cc-mcp-audit README](../../packages/cc-mcp-audit/README.md) for full CLI usage.
 
 ## Quick Start
 
@@ -43,7 +47,12 @@ Searches curated lists and GitHub, filters by language and star count, and produ
 
 ## What It Checks
 
-Five named accountability gap patterns:
+### Two-axis tool classification
+
+- **Read/write**: persistent-effect rule (does calling the tool change state?)
+- **Sensitivity**: governance-relevance (does the tool affect confidentiality, integrity, availability, autonomy, or accountability?)
+
+### Seven accountability gap patterns
 
 | Pattern | Confidence | What It Means |
 |---|---|---|
@@ -52,6 +61,8 @@ Five named accountability gap patterns:
 | auth-without-actor-logging | High | Auth present but log statements lack principal identifiers |
 | logging-without-attribution | Medium | Logging present but no principal identifiers and no auth |
 | destructive-without-audit-trail | High | Irreversible operations (drop, delete, truncate) with no logging |
+| sensitive-read-without-auth | High | Sensitive data exposed with no authentication |
+| sensitive-read-without-logging | High | Sensitive data access with no audit trail |
 
 Per-server governance posture assessment:
 
@@ -65,7 +76,7 @@ Optional `--llm-screen` flag adds Domain 5 triage hints (self-modification preve
 
 ### /mcp-audit:mcp-audit
 
-Analyze MCP servers for governance posture. Accepts GitHub URLs, local paths, or candidates files from discovery. Runs the `cc-mcp-audit` CLI, interprets the five accountability gap patterns, and presents a per-server governance posture report with risk summary.
+Analyze MCP servers for governance posture. Accepts GitHub URLs, local paths, or candidates files from discovery. Runs the `cc-mcp-audit` CLI, interprets the seven accountability gap patterns, and presents a per-server governance posture report with risk summary.
 
 ### /mcp-audit:mcp-discover
 
@@ -75,7 +86,7 @@ Discover MCP server candidates from curated lists (awesome-mcp-servers, official
 
 Per-server reports include:
 
-- Tool inventory (name, classification, sensitive keywords)
+- Tool inventory (name, read/write classification, sensitivity, write signals)
 - Governance posture (auth architecture, logging attribution, confirmation gates)
 - Accountability gaps with evidence locations and review notes
 - Risk summary (sensitive tool count, key concern)
@@ -105,6 +116,7 @@ The plugin auto-updates via git SHA tracking. To verify you have the latest:
 - Low-confidence gaps require manual verification before citing
 - "No tools extracted" with a framework-detected warning means the server uses a registration pattern not covered by regex extraction -- read source to complete the inventory
 - Domain 5 screening hints (via `--llm-screen`) are triage aids, not findings -- do not copy them into final assessments without human verification
+- Sensitivity classification uses boundary-aware keyword matching; known false positives from domain-specific keyword collisions (e.g., chemistry "charge", literature "medical")
 
 ## References
 

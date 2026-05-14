@@ -25,9 +25,9 @@ Optional: add `--llm-screen` to get triage hints for Domain 5 indicators (self-m
 
 If `cc-mcp-audit` is not found, tell the user:
 
-> `cc-mcp-audit` is not installed. From the ordovera-plugins repo, run:
+> `cc-mcp-audit` is not installed. Install with:
 > ```
-> cd packages/cc-mcp-audit && npm install && npm run build
+> npm install -g cc-mcp-audit
 > ```
 > Then re-run this skill.
 

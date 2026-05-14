@@ -1,22 +1,20 @@
 # cc-mcp-audit
 
-Governance posture analysis for MCP servers. Extracts tool inventories, classifies sensitivity, detects auth/logging/gate patterns, and surfaces named accountability gaps. Does not detect code-level vulnerabilities -- pair with SAST and dependency scanning for deployment decisions.
+Governance posture analysis for MCP servers. Extracts tool inventories, classifies read/write behavior and sensitivity, detects auth/logging/gate patterns, and surfaces named accountability gaps. Measures enforcement and audit concerns from the XACML/ABAC architecture against MCP server source code.
+
+Does not detect code-level vulnerabilities -- pair with SAST and dependency scanning for deployment decisions.
 
 ## Install
-
-From the ordovera-plugins monorepo:
-
-```bash
-cd packages/cc-mcp-audit && npm install && npm run build
-```
-
-Then run with:
 
 ```bash
 npx cc-mcp-audit <github-url-or-local-path> --format json
 ```
 
-Not yet published to npm. Must be built from source.
+Or install globally:
+
+```bash
+npm install -g cc-mcp-audit
+```
 
 ## Usage
 
@@ -27,27 +25,32 @@ cc-mcp-audit https://github.com/org/mcp-server --format json
 # Analyze a local directory
 cc-mcp-audit ./path/to/server --format json
 
-# Analyze from a candidates file (from discover)
+# Analyze from a candidates file
 cc-mcp-audit -c candidates.json --format json
 
-# Markdown report for multiple servers
-cc-mcp-audit -c candidates.json --format markdown
+# Evidence envelope format (XACML-shaped output)
+cc-mcp-audit -c candidates.json --format evidence -o evidence.json
 
-# Write output to file
-cc-mcp-audit -c candidates.json --format json -o report.json
+# Markdown report
+cc-mcp-audit -c candidates.json --format markdown
 
 # With LLM screening for Domain 5 triage hints
 cc-mcp-audit https://github.com/org/mcp-server --llm-screen
 
-# Discover MCP server candidates
+# Discover MCP server candidates (curated lists + GitHub search)
 cc-mcp-audit discover --min-stars 50 -o candidates.json
-cc-mcp-audit discover --language TypeScript --language Python
-cc-mcp-audit discover --skip-github  # curated lists only
 ```
 
 ## What It Checks
 
-Five named accountability gap patterns:
+### Two-axis tool classification
+
+Each extracted tool is classified on two orthogonal axes:
+
+- **Read/write** (persistent-effect): does calling this tool change persistent state? Validated at kappa=0.940 (LLM vs human).
+- **Sensitivity** (governance-relevance): does this tool affect confidentiality, integrity, availability, autonomy, or accountability? Validated at kappa=0.833 (deterministic vs human). Boundary-aware keyword matching prevents false positives.
+
+### Seven accountability gap patterns
 
 | Pattern | Confidence | What It Means |
 |---|---|---|
@@ -56,59 +59,52 @@ Five named accountability gap patterns:
 | auth-without-actor-logging | High | Auth present but log statements lack principal identifiers |
 | logging-without-attribution | Medium | Logging present but no principal identifiers and no auth |
 | destructive-without-audit-trail | High | Irreversible operations (drop, delete, truncate) with no logging |
+| sensitive-read-without-auth | High | Sensitive data exposed with no authentication |
+| sensitive-read-without-logging | High | Sensitive data access with no audit trail |
 
-Per-server governance posture:
+### Governance indicators (14 three-valued)
 
-- **Authorization**: Global / Per-tool / None / Delegated
-- **Logging**: Comprehensive / Partial / None -- attributed or unattributed
-- **Gates**: Default-safe / Default-unsafe / Absent
+Each indicator is coded Present / Absent / Indeterminate:
 
-## Discovery
+- **Enforcement (PEP)**: authentication, perToolAuth, confirmationGates, stagedExecution, rateLimiting, leastPrivilege, sensitiveReadProtection
+- **Audit (NIST 800-162 S5.7)**: auditLogging, actorAttribution
+- **Design**: readWriteSeparation, sensitiveCapabilityIsolation
+- **Domain 5 (human-only)**: selfModificationPrevention, subAgentAuthorityConstraints, permissionBoundaryEnforcement
 
-The `discover` subcommand finds MCP server candidates from curated lists and GitHub search:
+## Canonical Discovery
 
-```bash
-cc-mcp-audit discover [options]
+The `discover-registry` module enumerates MCP servers from three canonical registries:
 
-Options:
-  -o, --output <file>          Write candidates to file (default: stdout)
-  --min-stars <n>              Minimum GitHub stars (default: 10)
-  --updated-after <date>       Only repos pushed after this ISO date
-  --language <lang>            Filter by language (repeatable)
-  --exclude <pattern>          Exclude repos matching pattern (repeatable)
-  --github-token <token>       GitHub API token (higher rate limits)
-  --skip-github                Skip GitHub search, curated lists only
-  --skip-curated               Skip curated lists, GitHub search only
-  --existing <file>            Existing candidates file for deduplication
-```
+- **MCP Registry** (registry.modelcontextprotocol.io) -- paginated API, 25K+ entries
+- **npm** -- keyword search for mcp-server packages
+- **PyPI** -- simple index search for mcp packages
+
+Produces a canonical snapshot with provenance tags, deduplication by repository URL, and transport/ecosystem metadata. The `sampler` module draws stratified random samples with seeded PRNG for reproducibility.
+
+## LLM Verification
+
+The `verify` module runs per-server LLM verification using Claude Opus:
+
+1. MCP server confirmation (is this actually an MCP server?)
+2. Supplementary tool extraction (tools the heuristic missed)
+3. Classification validation (read/write rationale with source citations)
+
+Context extraction prioritizes dependency manifests, MCP-importing files, and entry points within a ~30K token budget.
 
 ## LLM Screening
 
-Optional `--llm-screen` adds Domain 5 triage hints for governance-relevant behavioral properties:
+Optional `--llm-screen` adds Domain 5 triage hints:
 
 - Self-modification prevention
 - Sub-agent authority constraints
 - Permission boundary enforcement
 
-Hints are `likely-present`, `likely-absent`, or `unclear` with cited file:line locations. They prioritize human review order -- they are not findings. Provider auto-detects Claude Code CLI if on PATH, otherwise uses `ANTHROPIC_API_KEY`.
+Hints are `likely-present`, `likely-absent`, or `unclear` with cited file:line locations. They prioritize human review order -- they are not findings.
 
 ## Environment
 
-- **GITHUB_TOKEN** -- GitHub personal access token for discovery enrichment and higher API rate limits
-- **ANTHROPIC_API_KEY** -- Required for `--llm-screen` if Claude Code CLI is not on PATH
-
-## Relationship to the mcp-audit Plugin
-
-This package is the CLI engine. The [mcp-audit plugin](../../plugins/mcp-audit/) wraps it with interpretive analysis -- it runs the CLI, reads the output, and presents a governance posture report with context-aware risk summaries.
-
-You can use cc-mcp-audit standalone (in scripts, CI, batch analysis) or through the plugin (interactive, interpretive).
-
-## Sibling packages and plugins
-
-- [cc-sc-verify package](../cc-sc-verify/) -- supply chain integrity checker for installed plugins
-- [mcp-audit plugin](../../plugins/mcp-audit/) -- interpretive wrapper for this CLI
-- [context-setup plugin](../../plugins/context-setup/) -- MCP optimization and trust boundary documentation
-- [top10-scan plugin](../../plugins/top10-scan/) -- OWASP Top 10 security scanning
+- **GITHUB_TOKEN** -- GitHub personal access token for discovery and higher API rate limits
+- **ANTHROPIC_API_KEY** -- Required for `--llm-screen` or `--llm-verify` if Claude Code CLI is not on PATH
 
 ## License
 
