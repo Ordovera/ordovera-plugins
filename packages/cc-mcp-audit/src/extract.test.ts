@@ -233,6 +233,161 @@ describe("extractTools", () => {
     });
   });
 
+  describe("Python registry-mediated via __all__ exports (Pattern Cr)", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-registry-server"));
+
+    it("recovers tool names from __all__ exports", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("search_duckduckgo");
+      expect(names).toContain("parse_pdf");
+      expect(names).toContain("extract_webpage_content");
+      expect(names).toContain("get_current_datetime");
+      expect(names).toContain("calculator");
+    });
+
+    it("post-filter drops framework classes (CamelCase names)", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).not.toContain("BaseTool");
+      expect(names).not.toContain("FunctionTool");
+      expect(names).not.toContain("ToolMetadata");
+      expect(names).not.toContain("ToolCategory");
+    });
+
+    it("post-filter drops helper functions and dispatchers", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).not.toContain("register_all_tools");
+      expect(names).not.toContain("load_tools");
+      expect(names).not.toContain("get_tool_definitions");
+      expect(names).not.toContain("call_tool_handler");
+    });
+  });
+
+  describe("Pattern Cr is gated on @list_tools handler presence", () => {
+    // Build a temp fixture with __all__ but no @list_tools -- Pattern Cr should NOT fire.
+    const tempDir = join(tmpdir(), `pattern-cr-gate-${Date.now()}`);
+    mkdirSync(join(tempDir, "tools"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "tools", "__init__.py"),
+      '__all__ = ["search", "extract", "compute"]\n'
+    );
+    writeFileSync(
+      join(tempDir, "server.py"),
+      'from mcp.server.fastmcp import FastMCP\nmcp = FastMCP("plain")\n'
+    );
+    afterEach(() => { try { rmSync(tempDir, { recursive: true, force: true }); } catch {} });
+
+    it("returns no tools when no @list_tools handler exists in the repo", () => {
+      const tools = extractTools(tempDir);
+      const crNames = tools.map((t) => t.name);
+      // The gate prevents the __all__-scanning pass from firing
+      expect(crNames).not.toContain("search");
+      expect(crNames).not.toContain("extract");
+      expect(crNames).not.toContain("compute");
+    });
+  });
+
+  describe("Python bare-name decorator from base module (Pattern D)", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-bare-decorator-server"));
+
+    it("extracts tools registered with @tool(name=...) imported from a base module", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("company_lookup");
+      expect(names).toContain("company_compare");
+      expect(names).toContain("company_delete");
+    });
+
+    it("handles multi-line @tool() with long description bodies", () => {
+      const lookup = tools.find((t) => t.name === "company_lookup");
+      expect(lookup?.description).toContain("Look up a company");
+    });
+
+    it("classifies a destructive bare-decorator tool as write", () => {
+      const del = tools.find((t) => t.name === "company_delete");
+      expect(del?.classification).toBe("write");
+    });
+  });
+
+  describe("Python @list_tools handler with inline Tool() (Pattern C)", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-list-tools-handler"));
+
+    it("extracts tools from multi-line Tool() constructors inside list_tools()", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("jis_whoami");
+      expect(names).toContain("jis_verify");
+      expect(names).toContain("jis_delete_identity");
+    });
+
+    it("classifies destructive tool from this pattern as write", () => {
+      const del = tools.find((t) => t.name === "jis_delete_identity");
+      expect(del?.classification).toBe("write");
+    });
+  });
+
+  describe("Python kwargs-only decorator (Pattern B)", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-kwargs-decorator-server"));
+
+    it("extracts function names from @mcp.tool(annotations={...}) decorators", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("list_virtual_machines");
+      expect(names).toContain("get_vm_info");
+      expect(names).toContain("delete_vm");
+    });
+
+    it("still respects explicit name= kwarg when present", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("explicit_name");
+      // The Python function name should NOT appear when name= overrides it
+      expect(names).not.toContain("func_with_different_name");
+    });
+
+    it("captures docstrings as descriptions", () => {
+      const listVms = tools.find((t) => t.name === "list_virtual_machines");
+      expect(listVms?.description).toContain("List virtual machines");
+    });
+
+    it("classifies destructive kwargs-decorator tools as write", () => {
+      const del = tools.find((t) => t.name === "delete_vm");
+      expect(del?.classification).toBe("write");
+    });
+  });
+
+  describe("TypeScript multi-line tool registration (Pattern A)", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-server-multiline"));
+
+    it("extracts multi-line server.tool() definitions", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("search_repositories");
+      expect(names).toContain("create_issue");
+    });
+
+    it("extracts multi-line server.registerTool() definitions", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("delete_branch");
+    });
+
+    it("handles blank lines between .tool( and the quoted name", () => {
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("list_branches");
+    });
+
+    it("does not extract variable-referenced tool names", () => {
+      // dynamicToolName variable -- Pattern A skips this (documented limit)
+      const names = tools.map((t) => t.name);
+      expect(names).not.toContain("dynamicToolName");
+      expect(names).not.toContain("noop");
+    });
+
+    it("captures description from the next non-blank line", () => {
+      const search = tools.find((t) => t.name === "search_repositories");
+      expect(search?.description).toContain("Search public GitHub repositories");
+    });
+
+    it("classifies a destructive multi-line tool as write", () => {
+      const del = tools.find((t) => t.name === "delete_branch");
+      expect(del?.classification).toBe("write");
+    });
+  });
+
   describe("FastMCP server", () => {
     const tools = extractTools(resolve(fixturesDir, "fastmcp-server"));
 

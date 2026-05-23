@@ -87,7 +87,114 @@ export function extractTools(repoPath: string): ExtractedTool[] {
     }
   }
 
+  // Pattern Cr: registry-mediated Python tools surfaced via __all__ exports
+  // in tools/__init__.py files. Only activates when the repo has a
+  // @<x>.list_tools() handler (gate against false positives in non-MCP code).
+  const existingNames = new Set(tools.map((t) => t.name));
+  const crTools = extractPatternCrRegistry(repoPath, sourceFiles);
+  for (const t of crTools) {
+    if (!existingNames.has(t.name)) {
+      tools.push(t);
+      existingNames.add(t.name);
+    }
+  }
+
   return tools;
+}
+
+/**
+ * Pattern Cr: when a Python repo has a `@<x>.list_tools()` handler that returns
+ * a runtime-built tool list, the actual tool names often live in `__all__`
+ * exports of `tools/__init__.py` files rather than at the construction site
+ * (which references variables like `Tool(name=tool.name, ...)`).
+ *
+ * Heuristic: scan any __init__.py under a `tools/` directory for __all__
+ * literals, then post-filter to skip obvious framework helpers (classes,
+ * dispatchers, registry methods).
+ */
+function extractPatternCrRegistry(
+  repoPath: string,
+  sourceFiles: string[]
+): ExtractedTool[] {
+  // Gate: any .py file with @<x>.list_tools()
+  const listToolsRe = /^[ \t]*@\w+\.list_tools\(\s*\)\s*$/m;
+  let hasHandler = false;
+  for (const filePath of sourceFiles) {
+    if (!filePath.endsWith(".py")) continue;
+    try {
+      if (listToolsRe.test(readFileSync(filePath, "utf-8"))) {
+        hasHandler = true;
+        break;
+      }
+    } catch { /* ignore unreadable file */ }
+  }
+  if (!hasHandler) return [];
+
+  const collected: ExtractedTool[] = [];
+  const allListRe = /__all__\s*[+]?=\s*\[([\s\S]*?)\]/g;
+  const nameLitRe = /["']([a-zA-Z_][a-zA-Z0-9_]*)["']/g;
+  const initPathRe = /(?:^|\/)tools\/(?:[^/]+\/)*__init__\.py$/;
+
+  for (const filePath of sourceFiles) {
+    const relPath = relative(repoPath, filePath);
+    if (!initPathRe.test(relPath)) continue;
+    let content: string;
+    try {
+      content = readFileSync(filePath, "utf-8");
+    } catch { continue; }
+
+    for (const allMatch of content.matchAll(allListRe)) {
+      const listBody = allMatch[1];
+      const baseLine = content.slice(0, allMatch.index ?? 0)
+        .split("\n").length;
+      for (const nm of listBody.matchAll(nameLitRe)) {
+        const name = nm[1];
+        if (!isPlausibleToolName(name)) continue;
+        // sourceLines omitted: the tool's declaration is in __init__.py
+        // (an export, not a registration), so annotation extraction has no
+        // useful target.
+        collected.push(
+          buildTool(name, "", relPath, baseLine)
+        );
+      }
+    }
+  }
+
+  return collected;
+}
+
+/**
+ * Post-filter for Pattern Cr: reject names that are almost certainly framework
+ * classes or dispatcher helpers rather than actual MCP tool names.
+ *
+ * Calibrated against the kazkozdev/mcp-search-server false positives observed
+ * during prototyping (BaseTool, FunctionTool, ToolMetadata, ToolCategory,
+ * ToolPriority, append_file, delete_file, list_files).
+ */
+function isPlausibleToolName(name: string): boolean {
+  // CamelCase names are almost always classes, not tools
+  if (/^[A-Z]/.test(name)) return false;
+  // Common helper/framework identifiers
+  const helpers = new Set([
+    "tool", "tools", "TOOLS", "error", "success", "logger", "config",
+    "register", "load", "register_tool", "register_tools",
+    "load_tool", "load_tools",
+  ]);
+  if (helpers.has(name)) return false;
+  // Suffix-based helpers / framework wiring
+  if (/_(handler|definitions|registry|store|manager|loader|factory|builder|provider|service|dispatcher|metadata)$/i.test(name)) {
+    return false;
+  }
+  // Prefix-based dispatcher helpers that end in tool/tools (avoids false
+  // positives on real tools like `register_user` or `load_config`)
+  if (/^(get|set|build|create|make|load|register|call|list|dispatch)_.*tools?$/i.test(name)) {
+    return false;
+  }
+  // Generic tool-on-tool wiring: get_tool_X, call_tool_X, etc.
+  if (/^(get|set|build|create|make|load|register|call)_tool(s?)(_|$)/i.test(name)) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -99,6 +206,24 @@ export function extractTools(repoPath: string): ExtractedTool[] {
 function extractPythonTools(content: string, file: string): ExtractedTool[] {
   const tools: ExtractedTool[] = [];
   const lines = content.split("\n");
+
+  // Pattern D gate: which bare-name decorators is this file actually importing?
+  // (Without this gate, `@tool(...)` in non-MCP code would be falsely flagged.)
+  const BARE_DECORATOR_NAMES = ["tool", "register_tool", "mcp_tool", "server_tool"];
+  const importedBareDecorators = new Set<string>();
+  for (const dec of BARE_DECORATOR_NAMES) {
+    // Match both single-line `from X import a, b, dec, c` and multi-line
+    // parenthesized `from X import (\n  ...\n  dec,\n  ...\n)`.
+    const escaped = dec.replace(/[$()*+.?[\\\]^{|}]/g, "\\$&");
+    const impRe = new RegExp(
+      `from\\s+[\\w.]+\\s+import\\s+(?:` +
+      `(?:[^()\\n]*\\b${escaped}\\b)` +
+      `|` +
+      `\\([^)]*\\b${escaped}\\b[^)]*\\)` +
+      `)`
+    );
+    if (impRe.test(content)) importedBareDecorators.add(dec);
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -146,6 +271,78 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
         }
       }
       continue;
+    }
+
+    // Pattern B: kwargs-only single-line decorator like
+    //   @mcp.tool(annotations={"readOnlyHint": True})
+    //   @mcp.tool(readonly=True)
+    // The previous three patterns reject these: pattern 1 wants a string-name,
+    // pattern 2 wants empty parens, pattern 3 wants the `(` at end of line.
+    // Fall back to the function name from the `def` that follows.
+    const kwargsOnlyToolMatch = line.match(/^\s*@\w+\.tool\((.*)\)\s*$/);
+    if (kwargsOnlyToolMatch) {
+      const body = kwargsOnlyToolMatch[1];
+      const hasPositionalName = /^\s*["']/.test(body);
+      const hasNameKwarg = /\bname\s*=\s*["']/.test(body);
+      if (!hasPositionalName && !hasNameKwarg) {
+        const { funcName, defLine } = findDefAfterDecorators(lines, i + 1);
+        if (funcName && defLine >= 0) {
+          const description = extractPythonDocstring(lines, defLine + 1);
+          tools.push(
+            buildTool(funcName, description, file, i + 1, undefined, lines)
+          );
+        }
+        continue;
+      }
+    }
+
+    // Pattern D: bare-name tool decorator imported from a project base module
+    //   from edgar.ai.mcp.tools.base import tool
+    //   @tool(
+    //     name="edgar_company",
+    //     description="...",
+    //   )
+    //   def my_func(...): ...
+    //
+    // Gated by importedBareDecorators (computed above) so we don't catch
+    // generic `@tool` decorators in unrelated code.
+    const bareDecMatch = line.match(/^\s*@(tool|register_tool|mcp_tool|server_tool)\(/);
+    if (bareDecMatch && importedBareDecorators.has(bareDecMatch[1])) {
+      const isMultilineOpen = /\(\s*$/.test(line);
+      if (isMultilineOpen) {
+        const { closingLine, body } = scanToClosingParen(lines, i);
+        if (closingLine >= 0) {
+          const nameFromDecorator = extractKwarg(body, "name");
+          const descFromDecorator = extractKwarg(body, "description");
+          const { funcName, defLine } = findDefAfterDecorators(lines, closingLine + 1);
+          if (funcName && defLine >= 0) {
+            const name = nameFromDecorator ?? funcName;
+            const description = descFromDecorator
+              ?? extractPythonDocstring(lines, defLine + 1);
+            tools.push(buildTool(name, description, file, i + 1, undefined, lines));
+            i = defLine;
+          }
+        }
+        continue;
+      } else {
+        // Single-line: @tool(name="x", description="y") or @tool(readonly=True)
+        const nameMatch = line.match(/\bname\s*=\s*["']([^"']+)["']/);
+        if (nameMatch) {
+          const description = extractInlineDescription(lines, i);
+          tools.push(
+            buildTool(nameMatch[1], description, file, i + 1, undefined, lines)
+          );
+        } else {
+          const { funcName, defLine } = findDefAfterDecorators(lines, i + 1);
+          if (funcName && defLine >= 0) {
+            const description = extractPythonDocstring(lines, defLine + 1);
+            tools.push(
+              buildTool(funcName, description, file, i + 1, undefined, lines)
+            );
+          }
+        }
+        continue;
+      }
     }
 
     // Dynamic registration: mcp.add_tool(func_ref, description="...")
@@ -200,6 +397,30 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
       tools.push(
         buildTool(nameKwMatch[1], description, file, i + 1, undefined, lines)
       );
+    }
+
+    // Pattern C: multi-line Tool() constructor with name on next non-blank line.
+    //   Tool(
+    //     name="jis_whoami",
+    //     description="...",
+    //   )
+    // Catches inline tool literals inside @list_tools() handler bodies.
+    // \bTool\b ensures we don't match suffix matches like `MyTool(`.
+    const multilineToolCtor = line.match(/\bTool\(\s*$/);
+    if (multilineToolCtor) {
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const next = lines[j];
+        if (!next.trim()) continue;
+        const nm = next.match(/^\s*name\s*=\s*["']([^"']+)["']/);
+        if (nm) {
+          const description = extractInlineDescription(lines, j);
+          tools.push(
+            buildTool(nm[1], description, file, i + 1, undefined, lines)
+          );
+        }
+        break;
+      }
+      continue;
     }
 
     // Class-based pattern: class FooBarTool(Tool, ...):
@@ -264,8 +485,11 @@ function extractClassApplyDocstring(
 function scanToClosingParen(
   lines: string[],
   startLine: number,
-  maxScan = 30
+  maxScan = 200
 ): { closingLine: number; body: string } {
+  // maxScan was 30, but modern MCP decorator calls commonly span 50-100+ lines
+  // (long triple-quoted descriptions + nested params dicts). 200 keeps us safe
+  // against runaway scans on unbalanced parens while accommodating real code.
   let depth = 0;
   const bodyLines: string[] = [];
   for (let j = startLine; j < Math.min(startLine + maxScan, lines.length); j++) {
@@ -287,10 +511,20 @@ function scanToClosingParen(
  * Matches `key="value"` or `key='value'`.
  */
 function extractKwarg(body: string, key: string): string | undefined {
-  const match = body.match(
+  // Prefer triple-quoted (Python multi-line) values when present
+  const tripleDouble = body.match(
+    new RegExp(`${key}\\s*=\\s*"""([\\s\\S]+?)"""`)
+  );
+  if (tripleDouble) return tripleDouble[1].trim();
+  const tripleSingle = body.match(
+    new RegExp(`${key}\\s*=\\s*'''([\\s\\S]+?)'''`)
+  );
+  if (tripleSingle) return tripleSingle[1].trim();
+  // Standard single-line quoted
+  const single = body.match(
     new RegExp(`${key}\\s*=\\s*["']([^"']+)["']`)
   );
-  return match?.[1];
+  return single?.[1];
 }
 
 /**
@@ -343,17 +577,46 @@ function extractTypeScriptTools(
       );
       continue;
     }
-    // Multi-line: .registerTool(\n  "name", ...
-    if (/\.registerTool\(\s*$/.test(line)) {
-      const nextLine = lines[i + 1];
-      const nextMatch = nextLine?.match(/^\s*["']([^"']+)["']/);
-      if (nextMatch) {
-        const description = extractInlineDescription(lines, i + 1);
-        tools.push(
-          buildTool(nextMatch[1], description, file, i + 1, undefined, lines)
-        );
-        continue;
+    // Multi-line: .tool( or .registerTool( with name on next non-blank line.
+    //   server.tool(
+    //     "tool_name",
+    //     "description",
+    //     ...
+    //
+    // Modern MCP servers use this form because schemas and descriptions are
+    // too long to fit on one line.
+    //
+    // Stops looking forward at the first non-blank line that isn't a quoted
+    // literal -- this avoids false positives when the name is a variable
+    // reference like server.tool(toolName, ...) (a documented limitation;
+    // resolving variable names requires cross-file analysis).
+    if (/\.(?:tool|registerTool)\(\s*$/.test(line)) {
+      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        const next = lines[j];
+        if (!next.trim()) continue;
+        const nameMatch = next.match(/^\s*["']([^"']+)["']/);
+        if (nameMatch) {
+          // For `.tool("name", "description", ...)` form, the description is
+          // the next non-blank line's quoted literal (positional). For
+          // `.registerTool("name", { description: "..." })` form, it's a
+          // kwarg-style match inside the options object. Try positional
+          // first, fall back to kwarg-style.
+          let description = "";
+          for (let k = j + 1; k < Math.min(j + 5, lines.length); k++) {
+            const descLine = lines[k];
+            if (!descLine.trim()) continue;
+            const posMatch = descLine.match(/^\s*["']([^"']+)["']/);
+            if (posMatch) description = posMatch[1];
+            break;
+          }
+          if (!description) description = extractInlineDescription(lines, j);
+          tools.push(
+            buildTool(nameMatch[1], description, file, i + 1, undefined, lines)
+          );
+        }
+        break;
       }
+      continue;
     }
 
     // Object-style: { name: "toolName", description: "..." }
