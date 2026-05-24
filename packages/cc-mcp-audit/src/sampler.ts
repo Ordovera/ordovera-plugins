@@ -1,5 +1,5 @@
 /**
- * Stratified random sampler for the Springer paper corpus.
+ * Stratified random sampler derived from a corpus of MCP servers.
  *
  * Draws a reproducible sample of 160 MCP servers from the canonical snapshot
  * across 6 strata defined by package ecosystem and MCP Registry presence.
