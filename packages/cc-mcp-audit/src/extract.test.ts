@@ -769,6 +769,70 @@ describe("extractTools", () => {
       expect(tools.length).toBe(2);
     });
   });
+
+  describe("Pattern Q: local registerTool wrapper with literal name in 3rd slot", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-wrapper-ctx-arg"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the literal name from the 3rd positional arg (after a ctx arg)", () => {
+      expect(names).toContain("caddis_list_devices");
+      expect(names).toContain("caddis_get_device");
+      expect(names).toContain("caddis_create_device");
+    });
+
+    it("classifies read vs write from the tool name", () => {
+      expect(tools.find((t) => t.name === "caddis_list_devices")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "caddis_create_device")?.classification).toBe("write");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
+
+  describe("Pattern L: setRequestHandler(ListTools) inline tools array", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-listtools-inline"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts each top-level tool object's name", () => {
+      expect(names).toContain("get_forecast");
+      expect(names).toContain("create_alert");
+    });
+
+    it("ignores nested name: props inside inputSchema (depth-awareness)", () => {
+      expect(names).not.toContain("loc_field");
+      expect(names).not.toContain("name");
+    });
+
+    it("does not pick up the capabilities `tools: {}` object", () => {
+      expect(tools.length).toBe(2);
+    });
+
+    it("classifies read vs write from the tool name", () => {
+      expect(tools.find((t) => t.name === "get_forecast")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "create_alert")?.classification).toBe("write");
+    });
+  });
+
+  describe("Pattern L: ListTools handler returning a same-file const array", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-listtools-const"));
+    const names = tools.map((t) => t.name);
+
+    it("resolves `tools: TOOLS` to the same-file const array", () => {
+      expect(names).toContain("list_repos");
+      expect(names).toContain("delete_repo");
+      expect(names).toContain("search_code");
+    });
+
+    it("classifies read vs write from the tool name", () => {
+      expect(tools.find((t) => t.name === "list_repos")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "delete_repo")?.classification).toBe("write");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
 });
 
 describe("detectUpstreamPackage", () => {

@@ -623,14 +623,15 @@ function extractPatternIXmcp(repoPath: string): ExtractedTool[] {
 }
 
 /**
- * Blank out Go comments (`//` line and block) while preserving newlines and
- * column offsets, so line-based matchers never extract tool names that appear
- * inside comments or doc examples. String, rune, and raw-string literals are
- * tracked so a `//` inside e.g. a `"https://..."` literal is not mistaken for a
- * comment; literal contents are left intact because Go tool names and
- * descriptions live inside string literals.
+ * Blank out C-style comments (`//` line and block) while preserving newlines
+ * and byte offsets, so line/offset-based matchers never extract tool names that
+ * appear inside comments or doc examples. String, rune/char, and raw/backtick
+ * literals are tracked so a `//` inside e.g. a `"https://..."` literal is not
+ * mistaken for a comment; literal contents are left intact because tool names
+ * and descriptions live inside string literals. Shared by the Go extractor and
+ * the TypeScript/JavaScript Pattern L (Go, TS, and JS share comment syntax).
  */
-function stripGoComments(content: string): string {
+function stripCStyleComments(content: string): string {
   let out = "";
   let i = 0;
   const n = content.length;
@@ -1138,11 +1139,18 @@ function extractTypeScriptTools(
   // Built-in wrapper names: defineTool, createTool. Plus registerTool when
   // gated as a local wrapper. Optional `<TypeParam>` generic between the
   // function name and `(` is allowed (bthurlow uses `registerTool<TParams>(...)`).
+  //
+  // Pattern Q generalization: the literal name may be the 2nd OR 3rd positional
+  // arg. Some local wrappers thread an extra context/registry arg before the
+  // name, e.g. lcm2m's `registerTool(server, registry, "name", {config}, handler)`.
+  // `(?:\w+\s*,\s*)?` optionally consumes that extra identifier arg. It cannot
+  // consume the name itself (a quoted literal is not `\w`), so the 2nd-arg shape
+  // still matches as before.
   const eFnNames = ["defineTool", "createTool"];
   if (hasLocalRegisterTool) eFnNames.push("registerTool");
   const eFnAlt = eFnNames.join("|");
   const patternEWithDescRe = new RegExp(
-    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*["']([^"']+)["']\\s*,\\s*["']([^"']*)["']`,
+    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*(?:\\w+\\s*,\\s*)?["']([^"']+)["']\\s*,\\s*["']([^"']*)["']`,
     "g"
   );
   const seenPatternE = new Set<string>();
@@ -1154,7 +1162,7 @@ function extractTypeScriptTools(
   }
   // No-description fallback: same shape, name only.
   const patternENoDescRe = new RegExp(
-    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*["']([^"']+)["']`,
+    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*(?:\\w+\\s*,\\s*)?["']([^"']+)["']`,
     "g"
   );
   for (const m of content.matchAll(patternENoDescRe)) {
@@ -1295,6 +1303,12 @@ function extractTypeScriptTools(
     }
   }
 
+  // Pattern L: low-level `server.setRequestHandler(ListToolsRequestSchema, ...)`
+  // handlers that return a `tools: [{ name, description, inputSchema }, ...]`
+  // array. Depth-aware extraction so nested `name:` props inside inputSchema are
+  // never mistaken for tool names (a naive scan over-counts 5-30x).
+  tools.push(...extractListToolsArrayTools(content, file, lines, lineOfOffset));
+
   // Deduplicate by name+file
   const seen = new Set<string>();
   return tools.filter((t) => {
@@ -1303,6 +1317,159 @@ function extractTypeScriptTools(
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Pattern L: extract tool names from a low-level MCP SDK ListTools handler's
+ * tools array. Gated on the file containing a `setRequestHandler(...ListTools...)`
+ * registration. Locates the tools array (inline `tools: [...]`, `tools: IDENT`,
+ * or `return { tools }` shorthand resolved to a same-file `const`), then walks
+ * it tracking string state and bracket/brace depth. A `name: "literal"` is a
+ * tool name only at element-object depth (depth 2: one `[` + one `{`); nested
+ * objects (inputSchema, annotations) sit deeper and are ignored. At most one
+ * name is taken per array element.
+ */
+function extractListToolsArrayTools(
+  content: string,
+  file: string,
+  lines: string[],
+  lineOfOffset: (off: number) => number
+): ExtractedTool[] {
+  const out: ExtractedTool[] = [];
+  // Strip comments first (offset-preserving) so a `tools: [...]` example in a
+  // comment can neither trip the gate nor misdirect the array finder.
+  const code = stripCStyleComments(content);
+  if (!/setRequestHandler\s*\(\s*[\w.]*ListTools/.test(code)) return out;
+
+  // arrOpen is a byte offset; stripCStyleComments preserves length, so it is
+  // valid in the raw `content` too. Walk the RAW content via skipNonCode, which
+  // robustly steps over comments, strings, and template literals (escapes +
+  // `${}` interpolation) so structural depth tracking only sees real code.
+  const arrOpen = findToolsArrayOpen(code);
+  if (arrOpen < 0) return out;
+
+  const nameKeyRe = /^name\s*:\s*["'`]([^"'`]+)["'`]/;
+  let depth = 0;
+  let capturedInElement = false;
+  const n = content.length;
+  let i = arrOpen;
+  while (i < n) {
+    const skip = skipNonCode(content, i);
+    if (skip > i) { i = skip; continue; }
+    const c = content[i];
+    if (c === "[" || c === "{") {
+      depth++;
+      if (depth === 2 && c === "{") capturedInElement = false;
+      i++;
+      continue;
+    }
+    if (c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) break; // tools array closed
+      i++;
+      continue;
+    }
+    if (depth === 2 && !capturedInElement && c === "n") {
+      const m = content.slice(i).match(nameKeyRe);
+      if (m) {
+        out.push(buildTool(m[1], "", file, lineOfOffset(i), undefined, lines));
+        capturedInElement = true;
+        i += m[0].length;
+        continue;
+      }
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Given an index into JS/TS source, if it begins a non-code token (line or
+ * block comment, single/double-quoted string, or template literal), return the
+ * index just past that token; otherwise return `i` unchanged. Template literals
+ * are walked with escape handling and balanced `${...}` interpolation skipping
+ * (interpolations may themselves contain nested strings/templates).
+ */
+function skipNonCode(s: string, i: number): number {
+  const c = s[i];
+  const c1 = s[i + 1];
+  if (c === "/" && c1 === "/") {
+    const nl = s.indexOf("\n", i);
+    return nl < 0 ? s.length : nl;
+  }
+  if (c === "/" && c1 === "*") {
+    const e = s.indexOf("*/", i + 2);
+    return e < 0 ? s.length : e + 2;
+  }
+  if (c === '"' || c === "'") {
+    let j = i + 1;
+    while (j < s.length) {
+      if (s[j] === "\\") { j += 2; continue; }
+      if (s[j] === c) return j + 1;
+      if (s[j] === "\n") return j; // unterminated-string safety
+      j++;
+    }
+    return j;
+  }
+  if (c === "`") {
+    let j = i + 1;
+    while (j < s.length) {
+      if (s[j] === "\\") { j += 2; continue; }
+      if (s[j] === "`") return j + 1;
+      if (s[j] === "$" && s[j + 1] === "{") {
+        let d = 1;
+        j += 2;
+        while (j < s.length && d > 0) {
+          const sk = skipNonCode(s, j);
+          if (sk > j) { j = sk; continue; }
+          const k = s[j];
+          if (k === "{") d++;
+          else if (k === "}") d--;
+          j++;
+        }
+        continue;
+      }
+      j++;
+    }
+    return j;
+  }
+  return i;
+}
+
+/**
+ * Find the byte offset of the `[` that opens a ListTools `tools` array.
+ * Handles inline `tools: [`, `tools: IDENT` (resolved to a same-file
+ * `const IDENT = [`), and `return { tools }` shorthand (const named `tools`).
+ * Returns -1 if not found.
+ */
+function findToolsArrayOpen(content: string): number {
+  const inline = content.match(/\btools\s*:\s*\[/);
+  if (inline && inline.index !== undefined) {
+    return inline.index + inline[0].length - 1;
+  }
+  // Collect candidate array-const identifiers from `tools: IDENT`,
+  // `tools: typeof IDENT` (type annotations still name the array), and the
+  // `return { tools }` shorthand. Skip primitive/type-keyword captures.
+  const skip = new Set([
+    "string", "number", "boolean", "any", "unknown", "object", "Tool", "Array",
+    "ReadonlyArray", "void", "null", "undefined",
+  ]);
+  const idents: string[] = [];
+  for (const m of content.matchAll(/\btools\s*:\s*(?:typeof\s+)?([A-Za-z_]\w*)/g)) {
+    if (!skip.has(m[1]) && !idents.includes(m[1])) idents.push(m[1]);
+  }
+  if (/\{\s*tools\s*\}/.test(content) && !idents.includes("tools")) idents.push("tools");
+  for (const ident of idents) {
+    const escaped = ident.replace(/[$()*+.?[\\\]^{|}]/g, "\\$&");
+    const constRe = new RegExp(
+      `(?:export\\s+)?const\\s+${escaped}\\s*(?::[^=]+)?=\\s*\\[`
+    );
+    const cm = content.match(constRe);
+    if (cm && cm.index !== undefined) {
+      return cm.index + cm[0].length - 1;
+    }
+  }
+  return -1;
 }
 
 /**
@@ -1321,7 +1488,7 @@ function extractGoTools(content: string, file: string): ExtractedTool[] {
   // Match against a comment-stripped copy so tool registrations that appear in
   // comments or doc examples are not extracted. String literals are preserved
   // (Go tool names/descriptions live in them).
-  const cleaned = stripGoComments(content);
+  const cleaned = stripCStyleComments(content);
   const lines = cleaned.split("\n");
 
   // Pattern J2: custom Go MCP layer where each tool is a struct implementing an
