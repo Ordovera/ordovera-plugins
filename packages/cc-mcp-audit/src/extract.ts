@@ -99,7 +99,108 @@ export function extractTools(repoPath: string): ExtractedTool[] {
     }
   }
 
+  // Pattern G: TS factory-server with `const tools = [{ name: IDENT, ... }, ...]`
+  // and a later for-loop calling `server.tool(tool.name, ...)`. The IDENT is
+  // resolved cross-file via the file's import map.
+  const gTools = extractPatternGArrayLoopImports(repoPath, sourceFiles);
+  for (const t of gTools) {
+    if (!existingNames.has(t.name)) {
+      tools.push(t);
+      existingNames.add(t.name);
+    }
+  }
+
+  // Pattern H: TS manifest-driven loop. A record literal
+  // `const NAME: Record<string, X> = { key: ..., ...spread }` iterated via
+  // `Object.entries(NAME)` with `.registerTool(VAR, ...)` inside the loop.
+  // Spreads are resolved one hop through the import map.
+  const hTools = extractPatternHRecordLoop(repoPath, sourceFiles);
+  for (const t of hTools) {
+    if (!existingNames.has(t.name)) {
+      tools.push(t);
+      existingNames.add(t.name);
+    }
+  }
+
+  // Pattern I: xmcp framework — file-per-tool convention. Gate on xmcp dep +
+  // xmcp.config.* at repo root; for each TS file in the configured tools dir,
+  // extract the literal `name:` from `export const metadata: ToolMetadata = { ... }`.
+  const iTools = extractPatternIXmcp(repoPath);
+  for (const t of iTools) {
+    if (!existingNames.has(t.name)) {
+      tools.push(t);
+      existingNames.add(t.name);
+    }
+  }
+
   return tools;
+}
+
+// ── TS cross-file helpers (used by Patterns F, G, H) ───────────────────────
+
+/**
+ * Parse `import { a, b as c, type D } from "<path>"` statements.
+ * Returns map of locally-bound name → import source string.
+ */
+function parseTsImports(content: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const re = /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g;
+  for (const m of content.matchAll(re)) {
+    const namesRaw = m[1];
+    const path = m[2];
+    for (let n of namesRaw.split(",")) {
+      n = n.trim();
+      if (!n) continue;
+      // `X as Y` -> Y is the local binding
+      const asIdx = n.indexOf(" as ");
+      if (asIdx !== -1) n = n.slice(asIdx + 4).trim();
+      // `type X` -> X
+      if (n.startsWith("type ")) n = n.slice(5).trim();
+      if (n) out.set(n, path);
+    }
+  }
+  return out;
+}
+
+/**
+ * Parse top-level `(export )?const IDENT = "literal"` declarations.
+ * Used to resolve identifier-named tool registrations to their literal values.
+ */
+function parseTsConstLiterals(content: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const re = /(?:export\s+)?const\s+(\w+)\s*(?::\s*[^=]+)?=\s*["']([^"']+)["']/g;
+  for (const m of content.matchAll(re)) {
+    out.set(m[1], m[2]);
+  }
+  return out;
+}
+
+/**
+ * Resolve a relative import spec to an absolute file path on disk.
+ * Handles the TS convention of writing `./foo.js` to refer to `./foo.ts`.
+ * Returns null for non-relative imports (node_modules) or unresolvable paths.
+ */
+function resolveTsImport(
+  importingFile: string,
+  importSpec: string
+): string | null {
+  if (!importSpec.startsWith(".")) return null;
+  const base = join(dirname(importingFile), importSpec);
+  const candidates = [
+    base,
+    base.replace(/\.js$/, ".ts"),
+    base.replace(/\.js$/, ".mts"),
+    base + ".ts",
+    base + ".mts",
+    join(base, "index.ts"),
+    join(base, "index.mts"),
+  ];
+  for (const c of candidates) {
+    try {
+      if (statSync(c, { throwIfNoEntry: false })?.isFile()) return c;
+    } catch { /* ignore */ }
+  }
+  return null;
 }
 
 /**
@@ -198,6 +299,431 @@ function isPlausibleToolName(name: string): boolean {
 }
 
 /**
+ * Pattern G: TS factory-server uses an inline array of tool descriptors with
+ * imported identifier names, then iterates and registers in a loop.
+ *
+ *   const tools = [
+ *     { name: searchSecuritiesToolName, description: searchSecuritiesToolDescription, ... },
+ *     { name: getMarketDataToolName, description: getMarketDataToolDescription, ... },
+ *     ...
+ *   ];
+ *   for (const tool of tools) {
+ *     server.tool(tool.name, tool.description, tool.schema.shape, tool.handler);
+ *   }
+ *
+ * Each name identifier is resolved one hop via the file's `import {…} from "./path"`
+ * statements; the source file must contain `export const IDENT = "literal"`.
+ */
+function extractPatternGArrayLoopImports(
+  repoPath: string,
+  sourceFiles: string[]
+): ExtractedTool[] {
+  const loopRe =
+    /\bfor\s*\(\s*const\s+\w+\s+of\s+\w+\s*\)\s*\{[^}]*?\.(?:tool|registerTool)\s*\(\s*\w+\.name/s;
+  const arrayRe = /\bconst\s+\w+\s*=\s*\[([\s\S]*?)\]/g;
+  const nameFieldRe = /\bname\s*:\s*(\w+)\b/g;
+  // Pattern G/K1: also match positional-ident registrations
+  //   server.tool(toolNameIdent, descIdent, schema, handler)
+  // where toolNameIdent and descIdent are imported. The current `.tool(`
+  // matcher in extractTypeScriptTools only handles literal-string first args,
+  // so these slip through. We collect (nameIdent, descIdent) pairs whose
+  // first ident position is filled with an identifier (not a quote).
+  const callIdentRe =
+    /\.(?:tool|registerTool)\s*\(\s*(\w+)\s*,\s*(\w+)\s*,/g;
+
+  // Helper: resolve an ident to a literal (local then cross-file).
+  const resolveIdent = (
+    filePath: string,
+    ident: string,
+    localConsts: Map<string, string>,
+    fileImports: Map<string, string>,
+  ): string | undefined => {
+    let value = localConsts.get(ident);
+    if (value) return value;
+    const importSpec = fileImports.get(ident);
+    if (!importSpec) return undefined;
+    const resolved = resolveTsImport(filePath, importSpec);
+    if (!resolved) return undefined;
+    try {
+      const imported = readFileSync(resolved, "utf-8");
+      return parseTsConstLiterals(imported).get(ident);
+    } catch { return undefined; }
+  };
+
+  const collected: ExtractedTool[] = [];
+  for (const filePath of sourceFiles) {
+    const ext = extname(filePath);
+    if (ext !== ".ts" && ext !== ".mts" && ext !== ".js" && ext !== ".mjs") continue;
+    let content: string;
+    try { content = readFileSync(filePath, "utf-8"); } catch { continue; }
+    const relPath = relative(repoPath, filePath);
+    const fileImports = parseTsImports(content);
+    const localConsts = parseTsConstLiterals(content);
+
+    // G original shape: const tools = [{ name: IDENT, … }, …] + for-loop.
+    if (loopRe.test(content)) {
+      const seenInFile = new Set<string>();
+      for (const arrM of content.matchAll(arrayRe)) {
+        const body = arrM[1];
+        const lineNo = content.slice(0, arrM.index ?? 0).split("\n").length;
+        for (const nm of body.matchAll(nameFieldRe)) {
+          const ident = nm[1];
+          if (seenInFile.has(ident)) continue;
+          seenInFile.add(ident);
+          const value = resolveIdent(filePath, ident, localConsts, fileImports);
+          if (!value) continue;
+          collected.push(buildTool(value, "", relPath, lineNo));
+        }
+      }
+    }
+
+    // K1: positional `.tool(nameIdent, descIdent, …)` where both idents
+    // resolve cross-file. Skip when ident is a JS keyword (false-positive
+    // guard) or when it shadows a same-file const that isn't a string literal.
+    const keywords = new Set([
+      "this", "self", "server", "app", "mcp", "name", "tool",
+      "async", "await", "true", "false", "null", "undefined",
+    ]);
+    const seenK1 = new Set<string>();
+    for (const m of content.matchAll(callIdentRe)) {
+      const nameIdent = m[1];
+      const descIdent = m[2];
+      if (keywords.has(nameIdent)) continue;
+      if (seenK1.has(nameIdent)) continue;
+      const value = resolveIdent(filePath, nameIdent, localConsts, fileImports);
+      if (!value) continue;
+      const descVal = resolveIdent(filePath, descIdent, localConsts, fileImports) ?? "";
+      seenK1.add(nameIdent);
+      collected.push(buildTool(value, descVal, relPath, lineOfOffsetFromContent(content, m.index ?? 0)));
+    }
+  }
+  return collected;
+}
+
+function lineOfOffsetFromContent(content: string, off: number): number {
+  return content.slice(0, off).split("\n").length;
+}
+
+/**
+ * Pattern H: manifest-driven loop. A record literal acts as the tool registry;
+ * an Object.entries loop registers each entry.
+ *
+ *   const schemaMap: Record<string, AnySchema | null> = {
+ *     ...schemas,            // ← spread of imported record
+ *     upload_file: z.object({ ... }).strict(),
+ *   };
+ *   for (const [toolName, schema] of Object.entries(schemaMap)) {
+ *     ...
+ *     server.registerTool(toolName, { ... });
+ *   }
+ *
+ * Top-level keys of the record are the tool names. Spreads are resolved one
+ * hop via the import map; the imported file must export
+ * `export const NAME = { key: ..., ... }` whose top-level keys are recursively
+ * counted (one level only — avoids unbounded fanout).
+ */
+function extractPatternHRecordLoop(
+  repoPath: string,
+  sourceFiles: string[]
+): ExtractedTool[] {
+  const loopRe =
+    /for\s*\(\s*const\s+\[\s*(\w+)[\s,][^\]]*\]\s+of\s+Object\.entries\s*\(\s*(\w+)\s*\)\s*\)[\s\S]*?\.(?:tool|registerTool)\s*\(\s*\1\b/;
+  const recordReFor = (name: string) =>
+    new RegExp(
+      `const\\s+${name}\\s*(?::\\s*Record\\s*<\\s*string\\s*,[^>]+>)?\\s*=\\s*\\{([\\s\\S]*?)\\n\\}`,
+      "m"
+    );
+  // Source-side record export (e.g. `export const schemas = { ... }`)
+  const exportedRecordReFor = (name: string) =>
+    new RegExp(
+      `(?:export\\s+)?const\\s+${name}\\s*(?::\\s*[^=]+)?=\\s*\\{([\\s\\S]*?)\\n\\}`,
+      "m"
+    );
+
+  const collected: ExtractedTool[] = [];
+  for (const filePath of sourceFiles) {
+    const ext = extname(filePath);
+    if (ext !== ".ts" && ext !== ".mts" && ext !== ".js" && ext !== ".mjs") continue;
+    let content: string;
+    try { content = readFileSync(filePath, "utf-8"); } catch { continue; }
+    const loopM = content.match(loopRe);
+    if (!loopM) continue;
+    const recordName = loopM[2];
+    const relPath = relative(repoPath, filePath);
+    const fileImports = parseTsImports(content);
+
+    // First try: record declared in the same file
+    let recM = content.match(recordReFor(recordName));
+    let bodyContent = content;
+    let bodyFile = filePath;
+    let bodyRel = relPath;
+
+    // K2: record may be imported from another file. Follow the import.
+    if (!recM) {
+      const importSpec = fileImports.get(recordName);
+      if (importSpec) {
+        const resolved = resolveTsImport(filePath, importSpec);
+        if (resolved) {
+          try {
+            const imported = readFileSync(resolved, "utf-8");
+            const expM = imported.match(exportedRecordReFor(recordName));
+            if (expM) {
+              recM = expM;
+              bodyContent = imported;
+              bodyFile = resolved;
+              bodyRel = relative(repoPath, resolved);
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      if (!recM) continue;
+    }
+    const body = recM[1];
+    const lineNo = bodyContent.slice(0, recM.index ?? 0).split("\n").length;
+
+    const { keys, spreads } = extractTopLevelRecordKeys(body);
+    for (const k of keys) collected.push(buildTool(k, "", bodyRel, lineNo));
+
+    // One hop of spread resolution (uses the imports of the file the record
+    // lives in — could be original file or the imported file)
+    if (spreads.length > 0) {
+      const bodyImports = parseTsImports(bodyContent);
+      for (const sp of spreads) {
+        const importSpec = bodyImports.get(sp);
+        if (!importSpec) continue;
+        const resolved = resolveTsImport(bodyFile, importSpec);
+        if (!resolved) continue;
+        let imported: string;
+        try { imported = readFileSync(resolved, "utf-8"); } catch { continue; }
+        const expM = imported.match(exportedRecordReFor(sp));
+        if (!expM) continue;
+        const { keys: spKeys } = extractTopLevelRecordKeys(expM[1]);
+        const importedRel = relative(repoPath, resolved);
+        const importedLineNo = imported.slice(0, expM.index ?? 0).split("\n").length;
+        for (const k of spKeys) collected.push(buildTool(k, "", importedRel, importedLineNo));
+      }
+    }
+  }
+  return collected;
+}
+
+/**
+ * Walk a record-literal body and pull top-level keys + spread identifiers.
+ *
+ * A key counts as "top level" when the enclosing brace depth at the START of
+ * the key's line is 0. This lets us recognize `upload_file: z.object({ ... })`
+ * (depth opens inside the value expression on the same line) while still
+ * skipping keys nested inside child objects on subsequent lines.
+ */
+function extractTopLevelRecordKeys(body: string): { keys: string[]; spreads: string[] } {
+  const keys: string[] = [];
+  const spreads: string[] = [];
+  const keyRe = /^\s*["']?(\w+)["']?\s*:/;
+  const spreadRe = /\.\.\.(\w+)\b/g;
+
+  let depth = 0;
+  let inStr = false;
+  let strCh = "";
+  let lineBuf = "";
+  let lineStartDepth = 0;
+  const flushLine = () => {
+    if (lineStartDepth === 0) {
+      const km = lineBuf.match(keyRe);
+      if (km) keys.push(km[1]);
+      for (const sm of lineBuf.matchAll(spreadRe)) spreads.push(sm[1]);
+    }
+    lineBuf = "";
+    lineStartDepth = depth;
+  };
+  for (const ch of body) {
+    if (inStr) {
+      if (ch === strCh) inStr = false;
+      lineBuf += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      inStr = true;
+      strCh = ch;
+      lineBuf += ch;
+      continue;
+    }
+    if (ch === "\n") { flushLine(); continue; }
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+    lineBuf += ch;
+  }
+  if (lineBuf) flushLine();
+  return { keys, spreads };
+}
+
+/**
+ * Pattern I: xmcp framework. xmcp is a TypeScript MCP server framework that
+ * uses a file-per-tool convention. Each tool file under the configured tools
+ * directory exports a metadata constant declaring the tool's literal name:
+ *
+ *   export const metadata: ToolMetadata = {
+ *     name: "create-app-store-version",
+ *     description: "Create a new App Store version (...)",
+ *     annotations: { destructiveHint: false, ... },
+ *   };
+ *
+ * Gate: package.json declares an "xmcp" dependency AND repo root contains
+ * xmcp.config.{ts,mts,js,mjs}. The tools directory comes from the config's
+ * `paths.tools` string (default "src/tools").
+ */
+function extractPatternIXmcp(repoPath: string): ExtractedTool[] {
+  // Gate 1: xmcp dep in package.json
+  const pkgPath = join(repoPath, "package.json");
+  let pkgJson: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  try {
+    pkgJson = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  } catch { return []; }
+  const deps = { ...(pkgJson.dependencies ?? {}), ...(pkgJson.devDependencies ?? {}) };
+  if (!("xmcp" in deps)) return [];
+
+  // Gate 2: xmcp.config.* at root, plus parse for tools dir
+  let configContent: string | null = null;
+  for (const ext of ["ts", "mts", "js", "mjs"]) {
+    const cfg = join(repoPath, `xmcp.config.${ext}`);
+    try {
+      if (statSync(cfg, { throwIfNoEntry: false })?.isFile()) {
+        configContent = readFileSync(cfg, "utf-8");
+        break;
+      }
+    } catch { /* ignore */ }
+  }
+  if (configContent === null) return [];
+
+  const pathsToolsMatch = configContent.match(/tools\s*:\s*["']([^"']+)["']/);
+  const toolsDirRel = pathsToolsMatch ? pathsToolsMatch[1] : "src/tools";
+  const toolsDir = join(repoPath, toolsDirRel);
+  if (!statSync(toolsDir, { throwIfNoEntry: false })?.isDirectory()) return [];
+
+  const metadataRe = /export\s+const\s+metadata\s*(?::\s*ToolMetadata\s*)?=\s*\{([\s\S]*?)\n\}/;
+  const nameRe = /\bname\s*:\s*["']([^"']+)["']/;
+  const descRe = /\bdescription\s*:\s*["']([^"']+)["']/;
+
+  const collected: ExtractedTool[] = [];
+  for (const entry of readdirSync(toolsDir)) {
+    if (!entry.endsWith(".ts") && !entry.endsWith(".mts")) continue;
+    const filePath = join(toolsDir, entry);
+    let content: string;
+    try { content = readFileSync(filePath, "utf-8"); } catch { continue; }
+    const m = content.match(metadataRe);
+    if (!m) continue;
+    const body = m[1];
+    const nm = body.match(nameRe);
+    if (!nm) continue;
+    const dm = body.match(descRe);
+    const lineNo = content.slice(0, m.index ?? 0).split("\n").length;
+    const relPath = relative(repoPath, filePath);
+    collected.push(buildTool(nm[1], dm ? dm[1] : "", relPath, lineNo));
+  }
+  return collected;
+}
+
+/**
+ * Blank out Go comments (`//` line and block) while preserving newlines and
+ * column offsets, so line-based matchers never extract tool names that appear
+ * inside comments or doc examples. String, rune, and raw-string literals are
+ * tracked so a `//` inside e.g. a `"https://..."` literal is not mistaken for a
+ * comment; literal contents are left intact because Go tool names and
+ * descriptions live inside string literals.
+ */
+function stripGoComments(content: string): string {
+  let out = "";
+  let i = 0;
+  const n = content.length;
+  type S = "code" | "line" | "block" | "str" | "raw" | "char";
+  let state: S = "code";
+  while (i < n) {
+    const c = content[i];
+    const c2 = content[i + 1] ?? "";
+    if (state === "code") {
+      if (c === "/" && c2 === "/") { out += "  "; i += 2; state = "line"; continue; }
+      if (c === "/" && c2 === "*") { out += "  "; i += 2; state = "block"; continue; }
+      if (c === '"') { out += c; i++; state = "str"; continue; }
+      if (c === "`") { out += c; i++; state = "raw"; continue; }
+      if (c === "'") { out += c; i++; state = "char"; continue; }
+      out += c; i++; continue;
+    }
+    if (state === "line") {
+      if (c === "\n") { out += "\n"; state = "code"; }
+      else out += " ";
+      i++; continue;
+    }
+    if (state === "block") {
+      if (c === "*" && c2 === "/") { out += "  "; i += 2; state = "code"; continue; }
+      out += c === "\n" ? "\n" : " "; i++; continue;
+    }
+    if (state === "str" || state === "char") {
+      if (c === "\\") { out += c + (content[i + 1] ?? ""); i += 2; continue; }
+      out += c; i++;
+      if (c === '"' && state === "str") state = "code";
+      else if (c === "'" && state === "char") state = "code";
+      else if (c === "\n") state = "code"; // safety: unterminated literal
+      continue;
+    }
+    // raw string (backtick): no escapes
+    out += c; i++;
+    if (c === "`") state = "code";
+  }
+  return out;
+}
+
+/**
+ * Blank out Python `#` comments and triple-quoted strings (docstrings) while
+ * preserving newlines and column offsets. Single-line `'...'`/`"..."` literals
+ * are left intact because Python tool names live inside them
+ * (`@mcp.tool("name")`, `Tool(name="x")`). Triple-quoted strings are blanked so
+ * registration examples embedded in docstrings are not extracted as tools; the
+ * docstring text is still available for descriptions, which are read from the
+ * raw (un-stripped) lines elsewhere.
+ */
+function stripPythonDocstringsAndComments(content: string): string {
+  let out = "";
+  let i = 0;
+  const n = content.length;
+  type S = "code" | "comment" | "s1" | "d1" | "s3" | "d3";
+  let state: S = "code";
+  while (i < n) {
+    const c = content[i];
+    const three = content.slice(i, i + 3);
+    if (state === "code") {
+      if (c === "#") { out += " "; i++; state = "comment"; continue; }
+      if (three === '"""') { out += "   "; i += 3; state = "d3"; continue; }
+      if (three === "'''") { out += "   "; i += 3; state = "s3"; continue; }
+      if (c === '"') { out += c; i++; state = "d1"; continue; }
+      if (c === "'") { out += c; i++; state = "s1"; continue; }
+      out += c; i++; continue;
+    }
+    if (state === "comment") {
+      if (c === "\n") { out += "\n"; state = "code"; }
+      else out += " ";
+      i++; continue;
+    }
+    if (state === "d1" || state === "s1") {
+      const q = state === "d1" ? '"' : "'";
+      if (c === "\\") { out += c + (content[i + 1] ?? ""); i += 2; continue; }
+      out += c; i++;
+      if (c === q) state = "code";
+      else if (c === "\n") state = "code"; // safety: unterminated literal
+      continue;
+    }
+    // triple-quoted string: blank contents, preserve newlines, detect close
+    const close = state === "d3" ? '"""' : "'''";
+    if (c === "\\") {
+      const nx = content[i + 1] ?? "";
+      out += " " + (nx === "\n" ? "\n" : nx ? " " : "");
+      i += 2; continue;
+    }
+    if (content.slice(i, i + 3) === close) { out += "   "; i += 3; state = "code"; continue; }
+    out += c === "\n" ? "\n" : " "; i++; continue;
+  }
+  return out;
+}
+
+/**
  * Extract tools from Python source using common MCP patterns:
  * - @server.tool() / @app.tool() / @mcp.tool() decorators (single and multi-line)
  * - server.tool(name=...) / Tool(...) registrations
@@ -206,6 +732,10 @@ function isPlausibleToolName(name: string): boolean {
 function extractPythonTools(content: string, file: string): ExtractedTool[] {
   const tools: ExtractedTool[] = [];
   const lines = content.split("\n");
+  // Trigger matching runs against a copy with comments and docstrings blanked
+  // so registration examples in comments/docstrings are never extracted as
+  // tools. Descriptions and call bodies are still read from the raw `lines`.
+  const codeLines = stripPythonDocstringsAndComments(content).split("\n");
 
   // Pattern D gate: which bare-name decorators is this file actually importing?
   // (Without this gate, `@tool(...)` in non-MCP code would be falsely flagged.)
@@ -226,11 +756,12 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = codeLines[i];
 
     // Decorator pattern: @server.tool("name") or @mcp.tool(name="name")
+    // Multi-segment prefix supported: `@self.mcp.tool(...)`, `@app.api.tool(...)`.
     const decoratorMatch = line.match(
-      /@\w+\.tool\(\s*(?:name\s*=\s*)?["']([^"']+)["']/
+      /@\w+(?:\.\w+)*\.tool\(\s*(?:name\s*=\s*)?["']([^"']+)["']/
     );
     if (decoratorMatch) {
       const description = extractPythonDocstring(lines, i + 1);
@@ -241,7 +772,9 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     }
 
     // Bare decorator: @server.tool() with function name on next line (or after stacked decorators)
-    const bareDecoratorMatch = line.match(/@\w+\.tool\(\s*\)/);
+    // Also matches @server.tool (no parens at all — Pattern O1, semantic-model shape).
+    // Multi-segment prefix supported.
+    const bareDecoratorMatch = line.match(/@\w+(?:\.\w+)*\.tool(?:\(\s*\))?\s*$/);
     if (bareDecoratorMatch) {
       const { funcName, defLine } = findDefAfterDecorators(lines, i + 1);
       if (funcName && defLine >= 0) {
@@ -254,7 +787,8 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     }
 
     // Multi-line decorator: @mcp.tool(\n  description="...",\n  ...\n)
-    const multiLineDecoratorMatch = line.match(/@(\w+)\.tool\(\s*$/);
+    // Multi-segment prefix supported.
+    const multiLineDecoratorMatch = line.match(/@(\w+(?:\.\w+)*)\.tool\(\s*$/);
     if (multiLineDecoratorMatch) {
       const { closingLine, body } = scanToClosingParen(lines, i);
       if (closingLine >= 0) {
@@ -279,7 +813,8 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
     // The previous three patterns reject these: pattern 1 wants a string-name,
     // pattern 2 wants empty parens, pattern 3 wants the `(` at end of line.
     // Fall back to the function name from the `def` that follows.
-    const kwargsOnlyToolMatch = line.match(/^\s*@\w+\.tool\((.*)\)\s*$/);
+    // Multi-segment prefix supported.
+    const kwargsOnlyToolMatch = line.match(/^\s*@\w+(?:\.\w+)*\.tool\((.*)\)\s*$/);
     if (kwargsOnlyToolMatch) {
       const body = kwargsOnlyToolMatch[1];
       const hasPositionalName = /^\s*["']/.test(body);
@@ -341,6 +876,53 @@ function extractPythonTools(content: string, file: string): ExtractedTool[] {
             );
           }
         }
+        continue;
+      }
+    }
+
+    // Pattern P: multi-line tool() call with function-ref + kwargs
+    //   self.tool(
+    //     find_foo,
+    //     name="qdrant-find",
+    //     description="...",
+    //   )
+    // Common in FastMCP subclasses with a setup_tools() method (qdrant shape).
+    // Requires `name=` kwarg with a literal value. The first non-kwarg positional
+    // is typically a function reference and used as a fallback tool name.
+    // Excludes decorator lines (those start with `@`).
+    const patternPMatch = line.match(/^\s*\w+\.tool\(\s*$/);
+    if (patternPMatch && !line.trim().startsWith("@")) {
+      const { closingLine, body } = scanToClosingParen(lines, i);
+      if (closingLine >= 0) {
+        const nameFromKwarg = extractKwarg(body, "name");
+        const descFromKwarg = extractKwarg(body, "description");
+        const funcRef = body.match(/^\s*(\w+)\s*,/)?.[1];
+        const toolName = nameFromKwarg ?? funcRef;
+        if (toolName) {
+          tools.push(
+            buildTool(toolName, descFromKwarg ?? "", file, i + 1, undefined, lines)
+          );
+          i = closingLine;
+        }
+      }
+      continue;
+    }
+
+    // Pattern O2: single-line `<mcp>.tool(<func_ref>)` registration where the
+    // single argument is a function reference. The tool name IS the function
+    // name (no `name=` kwarg, no string literal). Common in vnstock-style
+    // sub-MCP wiring: `finance_mcp.tool(get_income_statements)`.
+    // Reject if the call has any kwargs (those are caught by Pattern P above)
+    // or any string literal first arg (handled by other matchers).
+    const patternO2Match = line.match(/^\s*\w+\.tool\(\s*(\w+)\s*\)\s*$/);
+    if (patternO2Match) {
+      const funcRef = patternO2Match[1];
+      // Reject identifiers that are obviously not tool names (loop vars, etc.)
+      const skip = new Set(["self", "cls", "tool", "name", "func"]);
+      if (!skip.has(funcRef)) {
+        tools.push(
+          buildTool(funcRef, "", file, i + 1, undefined, lines)
+        );
         continue;
       }
     }
@@ -538,6 +1120,68 @@ function extractTypeScriptTools(
 ): ExtractedTool[] {
   const tools: ExtractedTool[] = [];
   const lines = content.split("\n");
+  const lineOfOffset = (off: number) => content.slice(0, off).split("\n").length;
+
+  // Patterns E and F: whole-file scans for custom wrapper calls. The wrappers
+  // are typically written across multiple lines (the helper signature has 5-7
+  // arguments), so per-line matching misses everything; scan the whole content.
+  const fileImports = parseTsImports(content);
+  const fileConsts = parseTsConstLiterals(content);
+  // Pattern E/F gate on `registerTool` import: when it's imported from a LOCAL
+  // path, the call is a user wrapper around server.registerTool. Otherwise the
+  // SDK's `.registerTool("name", ...)` method-call matcher below handles it.
+  const registerToolImport = fileImports.get("registerTool");
+  const hasLocalRegisterTool =
+    registerToolImport !== undefined && registerToolImport.startsWith(".");
+
+  // Pattern E: custom wrapper(server, "name", "description", schema, handler, ...).
+  // Built-in wrapper names: defineTool, createTool. Plus registerTool when
+  // gated as a local wrapper. Optional `<TypeParam>` generic between the
+  // function name and `(` is allowed (bthurlow uses `registerTool<TParams>(...)`).
+  const eFnNames = ["defineTool", "createTool"];
+  if (hasLocalRegisterTool) eFnNames.push("registerTool");
+  const eFnAlt = eFnNames.join("|");
+  const patternEWithDescRe = new RegExp(
+    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*["']([^"']+)["']\\s*,\\s*["']([^"']*)["']`,
+    "g"
+  );
+  const seenPatternE = new Set<string>();
+  for (const m of content.matchAll(patternEWithDescRe)) {
+    seenPatternE.add(m[1]);
+    tools.push(
+      buildTool(m[1], m[2], file, lineOfOffset(m.index ?? 0), undefined, lines)
+    );
+  }
+  // No-description fallback: same shape, name only.
+  const patternENoDescRe = new RegExp(
+    `\\b(?:${eFnAlt})\\s*(?:<[^>]+>)?\\s*\\(\\s*\\w+\\s*,\\s*["']([^"']+)["']`,
+    "g"
+  );
+  for (const m of content.matchAll(patternENoDescRe)) {
+    if (seenPatternE.has(m[1])) continue;
+    seenPatternE.add(m[1]);
+    const line = lineOfOffset(m.index ?? 0);
+    tools.push(
+      buildTool(m[1], extractInlineDescription(lines, line - 1), file, line, undefined, lines)
+    );
+  }
+
+  // Pattern F: local-wrapper registerTool(server, NAME_CONST, DESC_CONST, ...)
+  // where name/description are identifier references to same-file consts. This
+  // remains separate from Pattern E because the ident-resolution path differs
+  // (E reads literals directly; F walks the const map). Both are gated on the
+  // same local-import check.
+  if (hasLocalRegisterTool) {
+    const patternFRe = /\bregisterTool\s*\(\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)/g;
+    for (const m of content.matchAll(patternFRe)) {
+      const nameVal = fileConsts.get(m[1]);
+      const descVal = fileConsts.get(m[2]);
+      if (!nameVal) continue;
+      tools.push(
+        buildTool(nameVal, descVal ?? "", file, lineOfOffset(m.index ?? 0), undefined, lines)
+      );
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -674,10 +1318,54 @@ function extractTypeScriptTools(
  */
 function extractGoTools(content: string, file: string): ExtractedTool[] {
   const tools: ExtractedTool[] = [];
-  const lines = content.split("\n");
+  // Match against a comment-stripped copy so tool registrations that appear in
+  // comments or doc examples are not extracted. String literals are preserved
+  // (Go tool names/descriptions live in them).
+  const cleaned = stripGoComments(content);
+  const lines = cleaned.split("\n");
+
+  // Pattern J2: custom Go MCP layer where each tool is a struct implementing an
+  // interface with a `Name() string` method returning a literal. Gate on the
+  // file also containing an `InputSchema(` method (the MCP tool-interface
+  // signal) to avoid matching arbitrary Go types that happen to have Name().
+  const hasInputSchemaMethod = /\bInputSchema\s*\(/.test(cleaned);
+  if (hasInputSchemaMethod) {
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^func\s*\(\s*\w+\s+\w+\s*\)\s*Name\(\)\s*string\s*\{/);
+      if (!m) continue;
+      // Tool name is the literal returned within the next few lines.
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const rm = lines[j].match(/return\s+["'`]([^"'`]+)["'`]/);
+        if (rm) {
+          tools.push(buildTool(rm[1], "", file, i + 1, undefined, lines));
+          break;
+        }
+      }
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Pattern J1: mark3labs/mcp-go `mcp.NewTool("name", mcp.WithDescription("..."))`.
+    // The tool name is the first positional string arg. Description, when
+    // present, is a `WithDescription("...")` option that may be on the same line
+    // or a following line within the call. Matches any package alias
+    // (mcp.NewTool, mcplib.NewTool, etc.).
+    const newToolMatch = line.match(
+      /\b\w+\.NewTool\(\s*["'`]([^"'`]+)["'`]/
+    );
+    if (newToolMatch) {
+      // Look for WithDescription within the next ~15 lines (call body)
+      const descWindow = lines.slice(i, Math.min(i + 15, lines.length)).join(" ");
+      const descMatch = descWindow.match(
+        /WithDescription\(\s*["'`]([^"'`]+)["'`]/
+      );
+      tools.push(
+        buildTool(newToolMatch[1], descMatch?.[1] ?? "", file, i + 1, undefined, lines)
+      );
+      continue;
+    }
 
     // Pattern 1: Name: "tool_name" inside an mcp.Tool struct literal
     // Look for Name field in Go struct context

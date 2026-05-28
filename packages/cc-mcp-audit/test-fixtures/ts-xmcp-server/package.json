@@ -1,0 +1,10 @@
+{
+  "name": "ts-xmcp-server-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "xmcp": "^0.6.5",
+    "zod": "^3.23.0"
+  }
+}

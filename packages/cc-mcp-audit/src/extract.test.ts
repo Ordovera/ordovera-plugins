@@ -547,6 +547,228 @@ describe("extractTools", () => {
       expect(tools).toEqual([]);
     });
   });
+
+  describe("Pattern E: custom defineTool wrapper", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-define-tool-wrapper"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the three defineTool calls under a per-domain registrar", () => {
+      expect(names).toContain("widgets_list");
+      expect(names).toContain("widgets_create");
+      expect(names).toContain("widgets_delete");
+    });
+
+    it("captures the literal description for each defineTool call", () => {
+      const list = tools.find((t) => t.name === "widgets_list");
+      expect(list?.description).toContain("List all widgets");
+    });
+
+    it("does not pick up defineTool examples embedded in comments", () => {
+      expect(names).not.toContain("literal_name");
+    });
+  });
+
+  describe("Pattern F: local registerTool wrapper with same-file consts", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-register-tool-const"));
+    const names = tools.map((t) => t.name);
+
+    it("resolves TOOL_NAME identifier to its same-file const literal", () => {
+      expect(names).toContain("channels");
+      expect(names).toContain("inboxes");
+    });
+
+    it("resolves DESCRIPTION identifier alongside name", () => {
+      const channels = tools.find((t) => t.name === "channels");
+      expect(channels?.description).toContain("Manage channels");
+    });
+  });
+
+  describe("Pattern G: inline array of imported tool-name identifiers", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-array-loop-imports"));
+    const names = tools.map((t) => t.name);
+
+    it("resolves each imported identifier cross-file to its literal", () => {
+      expect(names).toContain("search_users");
+      expect(names).toContain("get_user");
+      expect(names).toContain("list_groups");
+    });
+
+    it("anchors the source location at the array declaration in server.ts", () => {
+      const search = tools.find((t) => t.name === "search_users");
+      expect(search?.sourceFile).toBe("src/server.ts");
+    });
+  });
+
+  describe("Pattern H: manifest-driven record loop with spread import", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-record-loop-spread"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the inline top-level key", () => {
+      expect(names).toContain("upload_file");
+    });
+
+    it("resolves the imported spread record to its keys", () => {
+      expect(names).toContain("list_orders");
+      expect(names).toContain("get_order");
+      expect(names).toContain("cancel_order");
+      expect(names).toContain("refund_order");
+    });
+  });
+
+  describe("Pattern I: xmcp framework file-per-tool convention", () => {
+    const tools = extractTools(resolve(fixturesDir, "ts-xmcp-server"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the literal `name` from each tool file's metadata export", () => {
+      expect(names).toContain("create-widget");
+      expect(names).toContain("list-widgets");
+      expect(names).toContain("delete-widget");
+    });
+
+    it("captures the description from the metadata export", () => {
+      const create = tools.find((t) => t.name === "create-widget");
+      expect(create?.description).toContain("Create a new widget");
+    });
+
+    it("skips files in the tools dir with no metadata export", () => {
+      // _helpers.ts has no `export const metadata`; must not produce a phantom tool
+      expect(names).not.toContain("_helpers");
+      expect(names).not.toContain("formatWidget");
+    });
+
+    it("anchors sourceFile at the per-tool path under the configured tools dir", () => {
+      const create = tools.find((t) => t.name === "create-widget");
+      expect(create?.sourceFile).toBe("src/tools/create-widget.ts");
+    });
+  });
+
+  describe("Pattern O1: Python bare @x.tool decorator with no parens", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-bare-tool-noparens"));
+    const names = tools.map((t) => t.name);
+
+    it("uses the decorated function name as the tool name", () => {
+      expect(names).toContain("get_model_schema");
+      expect(names).toContain("list_dimensions");
+      expect(names).toContain("create_metric");
+    });
+
+    it("captures the function docstring as the description", () => {
+      const get = tools.find((t) => t.name === "get_model_schema");
+      expect(get?.description).toContain("Return the schema for a semantic model");
+    });
+
+    it("classifies read vs write from the function name", () => {
+      expect(tools.find((t) => t.name === "get_model_schema")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "create_metric")?.classification).toBe("write");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
+
+  describe("Pattern O2: Python single-line .tool(func_ref) registration", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-funcref-tool"));
+    const names = tools.map((t) => t.name);
+
+    it("uses the referenced function name as the tool name", () => {
+      expect(names).toContain("get_income_statements");
+      expect(names).toContain("get_balance_sheet");
+      expect(names).toContain("add_position");
+    });
+
+    it("classifies read vs write from the function name", () => {
+      expect(tools.find((t) => t.name === "get_income_statements")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "add_position")?.classification).toBe("write");
+    });
+
+    it("does not extract registrations embedded in comments or docstrings", () => {
+      expect(names).not.toContain("docstring_example");
+      expect(names).not.toContain("comment_example");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
+
+  describe("Pattern P: Python multi-line .tool(func_ref, name=, description=)", () => {
+    const tools = extractTools(resolve(fixturesDir, "python-multiline-funcref-tool"));
+    const names = tools.map((t) => t.name);
+
+    it("prefers the explicit name= kwarg over the function reference", () => {
+      expect(names).toContain("qdrant-find");
+      expect(names).toContain("qdrant-store");
+    });
+
+    it("captures the description= kwarg", () => {
+      const find = tools.find((t) => t.name === "qdrant-find");
+      expect(find?.description).toContain("Look up memories matching a query");
+    });
+
+    it("classifies read vs write across the registered tools", () => {
+      expect(tools.find((t) => t.name === "qdrant-find")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "qdrant-store")?.classification).toBe("write");
+    });
+
+    it("does not extract registrations embedded in the docstring", () => {
+      expect(names).not.toContain("docstring-tool");
+      expect(names).not.toContain("example_ref");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(2);
+    });
+  });
+
+  describe("Pattern J1: Go mark3labs/mcp-go mcp.NewTool(\"name\", ...)", () => {
+    const tools = extractTools(resolve(fixturesDir, "go-newtool-server"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the first positional string as the tool name", () => {
+      expect(names).toContain("get_repository");
+      expect(names).toContain("create_release");
+      expect(names).toContain("search_issues");
+    });
+
+    it("captures WithDescription on the same line or a following line", () => {
+      expect(tools.find((t) => t.name === "get_repository")?.description).toContain("Fetch metadata for a repository");
+      expect(tools.find((t) => t.name === "create_release")?.description).toContain("Publish a new release");
+    });
+
+    it("classifies read vs write", () => {
+      expect(tools.find((t) => t.name === "get_repository")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "create_release")?.classification).toBe("write");
+    });
+
+    it("does not extract NewTool examples embedded in comments", () => {
+      expect(names).not.toContain("commented_line_tool");
+      expect(names).not.toContain("commented_block_tool");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(3);
+    });
+  });
+
+  describe("Pattern J2: Go struct implementing Name() with InputSchema() gate", () => {
+    const tools = extractTools(resolve(fixturesDir, "go-interface-server"));
+    const names = tools.map((t) => t.name);
+
+    it("extracts the literal returned by each Name() method", () => {
+      expect(names).toContain("get_weather");
+      expect(names).toContain("create_alert");
+    });
+
+    it("classifies read vs write from the tool name", () => {
+      expect(tools.find((t) => t.name === "get_weather")?.classification).toBe("read");
+      expect(tools.find((t) => t.name === "create_alert")?.classification).toBe("write");
+    });
+
+    it("extracts the correct count", () => {
+      expect(tools.length).toBe(2);
+    });
+  });
 });
 
 describe("detectUpstreamPackage", () => {
