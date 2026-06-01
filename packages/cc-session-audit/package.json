@@ -1,6 +1,6 @@
 {
   "name": "cc-session-audit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Compliance analyzer for Claude Code sessions. Forensic analysis of tool use, MCP servers, autonomous behavior, and policy violations.",
   "type": "module",
   "bin": {
