@@ -70,6 +70,17 @@ npx cc-sc-verify --plugin context-setup@ordovera-plugins
 
 [Full documentation](packages/cc-sc-verify/README.md)
 
+### cc-session-audit
+
+Compliance analyzer for Claude Code sessions. Forensic analysis of a session's tool use, MCP servers, autonomous behavior, and policy violations, all read locally from the session's own JSONL transcript.
+
+```bash
+npx cc-session-audit <session.jsonl>
+npx cc-session-audit session.jsonl --policy policy.json --json
+```
+
+[Full documentation](packages/cc-session-audit/README.md)
+
 ## Repo Structure
 
 ```text
@@ -81,6 +92,7 @@ ordovera-plugins/
   packages/
     cc-mcp-audit/        npx cc-mcp-audit (governance posture CLI)
     cc-sc-verify/        npx cc-sc-verify (plugin supply chain checker)
+    cc-session-audit/    npx cc-session-audit (session compliance forensics)
 ```
 
 Plugins are SKILL.md files (prompt orchestration) with supporting data and scripts. Packages are TypeScript (ES modules) with their own package.json, built with `npm run build`.

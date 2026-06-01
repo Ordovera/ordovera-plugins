@@ -1,0 +1,75 @@
+name: Publish
+
+# Publishes a single workspace package when a tag of the form
+# <package>@<semver> is pushed, e.g. cc-mcp-audit@1.0.1
+# Auth is npm Trusted Publishing via OIDC -- no NPM_TOKEN secret.
+
+on:
+  push:
+    tags:
+      - "*@*"
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Upgrade npm (Trusted Publishing needs npm >= 11.5)
+        run: npm install -g npm@latest
+
+      # Parse the tag via an env var (never interpolate untrusted input into a
+      # shell) and validate it against a strict allowlist so anything that is
+      # not exactly <package>@<semver> fails closed before reaching a command.
+      - name: Parse and validate tag
+        id: parse
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^[a-z0-9-]+@[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' must be <package>@<semver>, e.g. cc-mcp-audit@1.0.1"
+            exit 1
+          fi
+          echo "pkg=${TAG%@*}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG##*@}" >> "$GITHUB_OUTPUT"
+          echo "Parsed package='${TAG%@*}' version='${TAG##*@}'"
+
+      - name: Verify package exists and manifest version matches the tag
+        env:
+          PKG: ${{ steps.parse.outputs.pkg }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          PKG_DIR="packages/$PKG"
+          if [ ! -f "$PKG_DIR/package.json" ]; then
+            echo "::error::No package at $PKG_DIR"
+            exit 1
+          fi
+          MANIFEST_VERSION="$(node -p "require('./$PKG_DIR/package.json').version")"
+          if [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+            echo "::error::Tag version $VERSION does not match manifest version $MANIFEST_VERSION in $PKG_DIR"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Build and test the tagged package
+        env:
+          PKG: ${{ steps.parse.outputs.pkg }}
+        run: |
+          npm run build --workspace="packages/$PKG"
+          npm test --workspace="packages/$PKG"
+
+      - name: Publish to npm (OIDC trusted publishing + provenance)
+        env:
+          PKG: ${{ steps.parse.outputs.pkg }}
+        run: npm publish --workspace="packages/$PKG" --provenance --access public

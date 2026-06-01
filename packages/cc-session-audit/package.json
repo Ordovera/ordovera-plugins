@@ -1,12 +1,23 @@
 {
   "name": "cc-session-audit",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Compliance analyzer for Claude Code sessions. Forensic analysis of tool use, MCP servers, autonomous behavior, and policy violations.",
   "type": "module",
   "bin": {
     "cc-session-audit": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ordovera/ordovera-plugins.git",
+    "directory": "packages/cc-session-audit"
+  },
+  "homepage": "https://github.com/ordovera/ordovera-plugins/tree/main/packages/cc-session-audit",
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",

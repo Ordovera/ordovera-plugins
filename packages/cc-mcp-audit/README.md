@@ -106,6 +106,14 @@ Hints are `likely-present`, `likely-absent`, or `unclear` with cited file:line l
 - **GITHUB_TOKEN** -- GitHub personal access token for discovery and higher API rate limits
 - **ANTHROPIC_API_KEY** -- Required for `--llm-screen` or `--llm-verify` if Claude Code CLI is not on PATH
 
+## Sibling packages and plugins
+
+- [cc-sc-verify package](../cc-sc-verify/) -- supply chain integrity checker for Claude Code plugins
+- [cc-session-audit package](../cc-session-audit/) -- session compliance forensics for Claude Code
+- [mcp-audit plugin](../../plugins/mcp-audit/) -- interpretive MCP governance analysis
+- [context-setup plugin](../../plugins/context-setup/) -- context engineering and trust boundary documentation
+- [top10-scan plugin](../../plugins/top10-scan/) -- OWASP Top 10 security scanning
+
 ## License
 
 MIT

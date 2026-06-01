@@ -102,6 +102,7 @@ The gap cc-sc-verify fills: every existing tool audits either structure/permissi
 ## Sibling packages and plugins
 
 - [cc-mcp-audit package](../cc-mcp-audit/) -- governance posture CLI for MCP servers
+- [cc-session-audit package](../cc-session-audit/) -- session compliance forensics for Claude Code
 - [mcp-audit plugin](../../plugins/mcp-audit/) -- interpretive MCP governance analysis
 - [context-setup plugin](../../plugins/context-setup/) -- context engineering and trust boundary documentation
 - [top10-scan plugin](../../plugins/top10-scan/) -- OWASP Top 10 security scanning
